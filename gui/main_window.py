@@ -78,8 +78,15 @@ class MainWindow(BaseView):
                                                   width=400, height=80, text_color="white")
         self.tittle_second_label.place(relx=0.5, rely=0.9, anchor="center")
         
-        
-        
+    # Kiểm tra kết nối cơ sở dữ liệu
+    def check_database_connection(self):
+        value, e = core.database.test_connection(self.AppConfig.database)
+        if not value:
+            self.show_message("LỖI KẾT NỐI", 
+                            f"KẾT NỐI CỦA BẠN KHÔNG KHẢ DỤNG\n\nMã lỗi: {e}\n\nVui lòng kiểm tra lại mạng và thử lại.\n"
+                            "(Hoặc liên hệ với quản trị viên hệ thống để được hỗ trợ).")
+            return False
+        return True
 
     # --- HÀM MỚI ĐỂ XỬ LÝ ĐĂNG NHẬP THỦ CÔNG ---
     def start_login_process(self):
@@ -94,6 +101,9 @@ class MainWindow(BaseView):
             self.show_message("Thiếu thông tin", "Vui lòng nhập tên đăng nhập và mật khẩu.")
             return
         # 1. Xác thực thông tin đăng nhập trước
+        # 1.1 Kiểm tra kết nối cơ sở dữ liệu
+        if not self.check_database_connection():
+            return
         result = core.database.login(username, password)
     
         if result is False:
@@ -115,8 +125,11 @@ class MainWindow(BaseView):
 
     def on_login(self, username, password, on_done_callback=None):
         """Xử lý sự kiện khi nút đăng nhập được nhấn."""
-        
+        # Kiểm tra kết nối cơ sở dữ liệu
+        if not self.check_database_connection():
+            return
         result = core.database.login(username, password)
+        
 
         if result is False:
             # Phần này giờ chỉ xử lý cho đăng nhập tự động thất bại

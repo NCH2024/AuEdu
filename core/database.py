@@ -46,7 +46,7 @@ def connect_db():
     except mysql.connector.Error as err:
         # In lỗi cụ thể để người dùng biết
         print(f"Lỗi kết nối CSDL: {err}")
-        print(f"Hãy kiểm tra file config.json trong %APPDATA%/DACS2_App")
+        print(f"Hãy kiểm tra file config.json trong %APPDATA%/AUEDU")
         return None
     
 # DB_CONFIG = {
@@ -89,6 +89,28 @@ def connect_db():
 #         print(f"Database connection error: {err}")
 #         return None
 
+
+def test_connection(db_config):
+    """
+    Thử kết nối đến cơ sở dữ liệu với cấu hình đã cho.
+    Trả về True nếu kết nối thành công, ngược lại False.
+    """
+    try:
+        connection = mysql.connector.connect(
+            host=db_config.host,
+            user=db_config.username,
+            password=db_config.password,
+            database=db_config.database_name,
+            port=db_config.port,
+            ssl_disabled=False
+        )
+        if connection.is_connected():
+            connection.close()
+            return True, None
+    except mysql.connector.Error as err:
+        print(f"Lỗi kết nối CSDL: {err}")
+        return False, err
+    return False, "Không thể kết nối đến CSDL vì lý do không xác định."
 
     
 def login(username, password):
