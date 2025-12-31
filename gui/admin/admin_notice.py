@@ -1,131 +1,75 @@
-
 import customtkinter as ctk
 from tkinter import ttk, messagebox, filedialog
 import tkinter as tk
-from datetime import datetime, date
+from datetime import datetime
 from PIL import Image
 from io import BytesIO
 from gui.base.base_frame import BaseFrame
-from gui.base.base_datepicker import DatePicker
 from gui.base.utils import *
 import core.database as db
+from core.theme_manager import Theme, AppFont 
 from mysql.connector import Error
 import os
 
 class AdminNotice(BaseFrame):
     def __init__(self, master=None, user=None, **kwargs):
+        kwargs['fg_color'] = Theme.Color.BG
         super().__init__(master, **kwargs)
         self.user = user
         self.set_label_title("Dashboard > Trang Chủ > QUẢN LÝ THÔNG BÁO")
-        
+        # [GIỮ NGUYÊN INIT NHƯ CŨ]
         try:
             self.temp_notice_dir = os.path.join(get_base_path(), "resources", "temp_notice_images")
             os.makedirs(self.temp_notice_dir, exist_ok=True)
-        except Exception as e:
-            print(f"Không thể tạo thư mục tạm: {e}")
-            self.temp_notice_dir = "." # Fallback
+        except Exception: self.temp_notice_dir = "."
+        self.selected_notice_id = None; self.current_image_pil = None; self.current_image_blob = None
+        self.image_preview_label = None; self.current_ctk_image = None 
+        try: db.connect_db(); self.setup_ui(); self._load_notice_data()
+        except Exception as e: messagebox.showerror("Lỗi", f"{e}")
 
-        # --- Trạng thái ---
-        self.selected_notice_id = None
-        self.current_image_pil = None
-        self.current_image_blob = None
-        self.image_preview_label = None
-        self.current_ctk_image = None # <<< Thêm dòng này để giữ tham chiếu CTkImage
-
-        try:
-            db.connect_db()
-            self.setup_ui()
-            self._load_notice_data()
-        except Error as e:
-             messagebox.showerror("Lỗi kết nối CSDL", f"Không thể kết nối CSDL: {e}\nVui lòng kiểm tra cấu hình.")
-             for child in self.winfo_children():
-                try: child.configure(state="disabled")
-                except tk.TclError: pass
-        except Exception as e:
-             messagebox.showerror("Lỗi khởi tạo", f"Lỗi không xác định: {e}")
-
-    # ... (setup_ui, on_expand, _create_notice_table giữ nguyên) ...
     def setup_ui(self):
-        # Frame chính chia làm 2 cột: Trái (Form), Phải (Bảng)
-        self.content_frame.grid_columnconfigure(0, weight=1) # Cột form
-        self.content_frame.grid_columnconfigure(1, weight=2) # Cột bảng (rộng hơn)
+        Theme.apply_treeview_style(self)
+        self.content_frame.grid_columnconfigure(0, weight=1); self.content_frame.grid_columnconfigure(1, weight=2)
         self.content_frame.grid_rowconfigure(0, weight=1)
 
-        # --- Frame Trái (Form Nhập liệu) ---
-        form_frame = ctk.CTkFrame(self.content_frame, fg_color="white", corner_radius=10)
-        form_frame.grid(row=0, column=0, padx=(5,2), pady=5, sticky="nsew")
-        form_frame.grid_columnconfigure(0, weight=1)
-        form_frame.grid_rowconfigure(1, weight=0) # Tiêu đề
-        form_frame.grid_rowconfigure(3, weight=1) # Nội dung (co giãn chính)
-        form_frame.grid_rowconfigure(5, weight=0) # Image preview (không co giãn nhiều)
-        form_frame.grid_rowconfigure(7, weight=0) # Buttons
+        # Form
+        form = ctk.CTkFrame(self.content_frame, fg_color=Theme.Color.BG_CARD, corner_radius=10)
+        form.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
+        form.grid_columnconfigure(0, weight=1); form.grid_rowconfigure(3, weight=1)
 
-        ctk.CTkLabel(form_frame, text="Tạo/Chỉnh sửa Thông báo:", font=("Bahnschrift", 16, "bold")).grid(
-            row=0, column=0, columnspan=2, padx=10, pady=(10, 5), sticky="w")
+        ctk.CTkLabel(form, text="Tạo/Chỉnh sửa Thông báo:", font=AppFont.H3, text_color=Theme.Color.TEXT).grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="w")
+        ctk.CTkLabel(form, text="Tiêu đề:", font=AppFont.BODY).grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.notice_title_entry = ctk.CTkEntry(form); self.notice_title_entry.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+        ctk.CTkLabel(form, text="Nội dung:", font=AppFont.BODY).grid(row=3, column=0, padx=10, sticky="nw")
+        self.notice_content_textbox = ctk.CTkTextbox(form, height=200, font=AppFont.BODY, wrap="word"); self.notice_content_textbox.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
-        ctk.CTkLabel(form_frame, text="Tiêu đề:", font=("Bahnschrift", 13)).grid(
-            row=1, column=0, padx=(10,2), pady=(5, 2), sticky="w")
-        self.notice_title_entry = ctk.CTkEntry(form_frame, placeholder_text="Nhập tiêu đề thông báo...")
-        self.notice_title_entry.grid(row=2, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
-
-        ctk.CTkLabel(form_frame, text="Nội dung:", font=("Bahnschrift", 13)).grid(
-            row=3, column=0, padx=(10,2), pady=(0, 2), sticky="nw") # nw để label ở trên
-        self.notice_content_textbox = ctk.CTkTextbox(form_frame, height=200, font=("Bahnschrift", 13), wrap="word")
-        self.notice_content_textbox.grid(row=4, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="nsew")
-
-        ctk.CTkLabel(form_frame, text="Hình ảnh:", font=("Bahnschrift", 13)).grid(
-            row=5, column=0, padx=(10,2), pady=(0, 2), sticky="nw")
+        img_ctrl = ctk.CTkFrame(form, fg_color="transparent"); img_ctrl.grid(row=6, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        ButtonTheme(img_ctrl, text="Chọn ảnh", width=100, command=self._select_image).grid(row=0, column=0, padx=5, sticky="nw")
+        ButtonTheme(img_ctrl, text="Xóa ảnh", width=80, fg_color=Theme.Color.DANGER, command=self._remove_image).grid(row=1, column=0, padx=5, pady=5, sticky="nw")
+        self.image_preview_label = ctk.CTkLabel(img_ctrl, text="Chưa có ảnh", fg_color=Theme.Color.BG, text_color="gray", height=150, corner_radius=5)
+        self.image_preview_label.grid(row=0, column=1, rowspan=2, padx=10, sticky="ew"); img_ctrl.grid_columnconfigure(1, weight=1)
         
-        image_control_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-        image_control_frame.grid(row=6, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
-        image_control_frame.grid_columnconfigure(1, weight=1) # Preview co giãn
+        btn = ctk.CTkFrame(form, fg_color="transparent"); btn.grid(row=7, column=0, columnspan=2, pady=10, padx=5, sticky="w")
+        ButtonTheme(btn, text="Thêm", width=100, fg_color=Theme.Color.SUCCESS, command=self._add_notice).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Cập nhật", width=100, fg_color=Theme.Color.INFO, command=self._update_notice).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Xóa", width=100, fg_color=Theme.Color.DANGER, command=self._delete_notice).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Làm mới", width=100, fg_color=Theme.Color.NEUTRAL, command=self._clear_notice_form).pack(side="left", padx=5)
 
-        self.select_image_btn = ctk.CTkButton(image_control_frame, text="Chọn ảnh", width=100, command=self._select_image)
-        self.select_image_btn.grid(row=0, column=0, padx=(0, 10), pady=5, sticky="nw")
+        # Table
+        table = ctk.CTkFrame(self.content_frame, fg_color=Theme.Color.BG_CARD, corner_radius=10)
+        table.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        table.grid_rowconfigure(1, weight=1); table.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(table, text="Danh sách Thông báo:", font=AppFont.H3, text_color=Theme.Color.TEXT).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self._create_notice_table(table)
 
-        self.image_preview_label = ctk.CTkLabel(image_control_frame, text="Chưa có ảnh", fg_color="#EAEAEA", text_color="gray", height=150, corner_radius=5)
-        self.image_preview_label.grid(row=0, column=1, pady=5, sticky="ew")
-
-        self.remove_image_btn = ctk.CTkButton(image_control_frame, text="Xóa ảnh", width=80, fg_color="#f44336", hover_color="#da190b", command=self._remove_image)
-        self.remove_image_btn.grid(row=1, column=0, padx=(0, 10), pady=5, sticky="nw")
-        
-        btn_frame_notice = ctk.CTkFrame(form_frame, fg_color="transparent")
-        btn_frame_notice.grid(row=7, column=0, columnspan=2, pady=10, padx=5, sticky="w")
-
-        self.notice_add_btn = ctk.CTkButton(btn_frame_notice, text="Thêm", fg_color="#4CAF50", hover_color="#45A049", width=100, command=self._add_notice)
-        self.notice_add_btn.pack(side="left", padx=5)
-        self.notice_update_btn = ctk.CTkButton(btn_frame_notice, text="Cập nhật", fg_color="#2196F3", hover_color="#2f61d6b9", width=100, command=self._update_notice)
-        self.notice_update_btn.pack(side="left", padx=5)
-        self.notice_delete_btn = ctk.CTkButton(btn_frame_notice, text="Xóa", fg_color="#f44336", hover_color="#da190b", width=100, command=self._delete_notice)
-        self.notice_delete_btn.pack(side="left", padx=5)
-        self.notice_clear_btn = ctk.CTkButton(btn_frame_notice, text="Làm mới", fg_color="#607D8B", hover_color="#546E7A", width=100, command=self._clear_notice_form)
-        self.notice_clear_btn.pack(side="left", padx=5)
-
-        # --- Frame Phải (Bảng Hiển thị) ---
-        table_frame = ctk.CTkFrame(self.content_frame, fg_color="white", corner_radius=10)
-        table_frame.grid(row=0, column=1, padx=(2,5), pady=5, sticky="nsew")
-        table_frame.grid_rowconfigure(1, weight=1) # Hàng bảng co giãn
-        table_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(table_frame, text="Danh sách Thông báo:", font=("Bahnschrift", 16, "bold")).grid(
-            row=0, column=0, padx=10, pady=(10, 5), sticky="w")
-
-        self._create_notice_table(table_frame) # Gọi hàm tạo bảng
-
-    def _create_notice_table(self, parent_frame):
-        # (Giữ nguyên)
-        table_container = ctk.CTkFrame(parent_frame, fg_color="transparent")
-        table_container.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
-        table_container.grid_rowconfigure(0, weight=1)
-        table_container.grid_columnconfigure(0, weight=1)
-        notice_cols = ("id", "tieu_de", "ngay_dang", "co_anh")
-        self.notice_table = ttk.Treeview(table_container, columns=notice_cols, show="headings")
+    def _create_notice_table(self, p):
+        cont = ctk.CTkFrame(p, fg_color="transparent"); cont.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        cont.grid_rowconfigure(0, weight=1); cont.grid_columnconfigure(0, weight=1)
+        self.notice_table = ttk.Treeview(cont, columns=("id", "td", "nd", "img"), show="headings")
         self.notice_table.grid(row=0, column=0, sticky="nsew")
-        self.notice_table.heading("id", text="ID"); self.notice_table.heading("tieu_de", text="Tiêu đề"); self.notice_table.heading("ngay_dang", text="Ngày đăng"); self.notice_table.heading("co_anh", text="Hình ảnh")
-        self.notice_table.column("id", width=50, anchor="center", stretch=False); self.notice_table.column("tieu_de", width=300, anchor="w"); self.notice_table.column("ngay_dang", width=150, anchor="center"); self.notice_table.column("co_anh", width=80, anchor="center", stretch=False)
-        notice_scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.notice_table.yview); notice_scrollbar.grid(row=0, column=1, sticky="ns"); self.notice_table.configure(yscrollcommand=notice_scrollbar.set)
+        for c, t in [("id","ID"), ("td","Tiêu đề"), ("nd","Ngày đăng"), ("img","Hình ảnh")]:
+            self.notice_table.heading(c, text=t)
         self.notice_table.bind("<<TreeviewSelect>>", self._select_notice_tree)
-
 
     def _load_notice_data(self):
         """Tải dữ liệu thông báo lên Treeview."""

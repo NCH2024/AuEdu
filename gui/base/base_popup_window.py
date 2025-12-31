@@ -5,7 +5,7 @@ from core.database import *
 from core.utils import get_base_path
 from PIL import Image
 import os
-
+from core.theme_manager import *
 
 class BasePopupWindow(ctk.CTkFrame):
     def __init__(self, master=None, config=None, **kwargs):
@@ -13,10 +13,10 @@ class BasePopupWindow(ctk.CTkFrame):
         self.config = config
         self._corner_radius = 0
         self._border_width = 0
-        self.widget_color = "#05243F"
-        self.text_color = "#2DFCB0"
-        self.text_color_w = "#FFFFFF"
-    
+        self.widget_color = Theme.Color.BG_CARD
+        self.text_color = Theme.Color.TEXT
+        self.text_color_w = Theme.Color.TEXT_SUB
+
         
         # làm lớp phủ
         self.place(relx=0.01, rely=0.01, relwidth=0.98, relheight=0.98)  
@@ -53,9 +53,10 @@ class BasePopupWindow(ctk.CTkFrame):
             text="ESC", 
             command=self.on_close, 
             fg_color="transparent", 
-            border_color="white",
+            border_color=Theme.Color.BORDER, 
             border_width=2,
-            hover_color="#939393",
+            text_color=self.text_color,     
+            hover_color=Theme.Color.SECONDARY, 
             font=("Bahnschrift", 18, "bold"),
             width=40,
             height=40,

@@ -55,6 +55,7 @@ class AppConfig:
     camera_config: CameraConfig
     threshold_security: ThresholdSecurity
     database: DatabaseConfig 
+    theme_mode: str = "Light"
 
 # Hàm chuyển từ dict -> dataclass (Đã cập nhật)
 def dict_to_config(data: dict) -> AppConfig:
@@ -62,7 +63,8 @@ def dict_to_config(data: dict) -> AppConfig:
         login_info=LoginInfo(**data.get("login_info", {})),
         camera_config=CameraConfig(**data.get("camera_config", {})),
         threshold_security=ThresholdSecurity(**data.get("threshold_security", {})),
-        database=DatabaseConfig(**data.get("database", {})) 
+        database=DatabaseConfig(**data.get("database", {})) ,
+        theme_mode=data.get("theme_mode", "Light")
     )
 
 # Hàm load config TỪ AppData (Đã chỉnh sửa)
@@ -80,7 +82,8 @@ def load_config() -> AppConfig:
                 liveness_threshold=0.20,
                 smooth_factor=5
             ),
-            database=DatabaseConfig()
+            database=DatabaseConfig(),
+            theme_mode="Light"
         )
         save_config(default_config) # Lưu file mặc định
         return default_config
@@ -101,6 +104,10 @@ def load_config() -> AppConfig:
             if not hasattr(config, 'database') or config.database.host is None:
                 config.database = DatabaseConfig() 
                 
+            # THÊM KIỂM TRA CHO THEME
+            if not hasattr(config, 'theme_mode') or config.theme_mode is None:
+                config.theme_mode = "Light"
+                
             return config
     except Exception as e:
         print(f"Lỗi khi load config: {e}. Đang trả về config mặc định.")
@@ -109,7 +116,8 @@ def load_config() -> AppConfig:
             login_info=LoginInfo(), 
             camera_config=CameraConfig(), 
             threshold_security=ThresholdSecurity(),
-            database=DatabaseConfig() 
+            database=DatabaseConfig(),
+            theme_mode="Light"
         )
 
 # Hàm lưu config VÀO AppData (Đã chỉnh sửa)

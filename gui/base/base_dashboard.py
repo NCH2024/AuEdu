@@ -1,12 +1,6 @@
 '''
-FILE NAME: gui/base_dashbroad.py
-CODE BY: Nguyễn Chánh Hiệp 
-DATE: 22/06/2025
-DESCRIPTION:
-        + Đây là lớp cơ sở (base class) cho các giao diện dạng Bảng điều khiển (Dashboard).
-        + Định nghĩa bố cục chung bao gồm một thanh bên (sidebar) và một khu vực nội dung (content).
-        + Cung cấp các thành phần chung như logo, nút đăng xuất và phương thức 'clear_content' để chuyển đổi giữa các trang.
-VERSION: 1.0.0
+FILE NAME: gui/base/base_dashboard.py
+DESCRIPTION: Lớp cơ sở cho Dashboard (Đã sửa nút Đăng xuất chuẩn Theme).
 '''
 import customtkinter as ctk
 from gui.base.base_view import BaseView
@@ -14,104 +8,150 @@ from gui.base.utils import ImageProcessor
 from core.app_config import save_config, load_config
 from core.utils import get_base_path
 import os
-
+from core.theme_manager import Theme, AppFont, ColorPalette
+from tkinter import messagebox
 
 class DashboardView(BaseView):
-    """
-    Lớp cơ sở cho các giao diện Bảng điều khiển (Dashboard).
-
-    Kế thừa từ `BaseView` và thiết lập một bố cục hai cột tiêu chuẩn:
-    - Một thanh bên (sidebar) cho điều hướng và các chức năng chung.
-    - Một khu vực nội dung (content) để hiển thị các trang con.
-    """
     def __init__(self, master, *args, **kwargs):
-        """
-        Khởi tạo giao diện Bảng điều khiển.
-
-        Args:
-            master: Widget cha (thường là một cửa sổ Toplevel).
-        """
         super().__init__(master, *args, **kwargs)
         self.master = master
         self.pack(fill="both", expand=True)
-        self.configure(fg_color="#05243F")
-        
         
         # Lấy cấu hình cài đặt ứng dụng
         self.AppConfig = kwargs.get('config')
 
         # Sidebar (menu bên trái)
-        self.sidebar = ctk.CTkFrame(self, width=300, corner_radius=0, fg_color="#05243F")
+        self.sidebar = ctk.CTkFrame(self, width=300, corner_radius=0, fg_color=Theme.Color.BG_CARD)
         # Content area (bên phải)
         self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="white")
 
-        # Sử dụng grid thay cho pack
+        # Grid Layout
         self.sidebar.grid(row=0, column=0, sticky="nswe")
         self.content.grid(row=0, column=1, sticky="nsew")
         
-        # --- CẢI TIẾN: Cấu hình grid cho content frame ---
-        # Điều này rất quan trọng để các trang con có thể xếp chồng và co giãn
         self.content.grid_rowconfigure(0, weight=1)
         self.content.grid_columnconfigure(0, weight=1)
 
-        # Cấu hình grid để sidebar rộng 400, content mở rộng
         self.grid_columnconfigure(0, minsize=300)      
         self.grid_columnconfigure(1, weight=1)         
         self.grid_rowconfigure(0, weight=1)            
 
-        # Thêm hình ảnh logo
+        # Logo
         base_path = get_base_path()
-        self.bg_ctkimage = ImageProcessor(os.path.join(base_path, "resources","images","dnc.png")) \
-                                .crop_to_aspect(150, 150) \
-                                .resize(150, 150) \
-                                .to_ctkimage(size=(150, 150))
+        try:
+            self.bg_ctkimage = ImageProcessor(os.path.join(base_path, "resources","images","logo.png")) \
+                                    .crop_to_aspect(467, 213) \
+                                    .resize(232, 105) \
+                                    .to_ctkimage(size=(232,105))
+            self.bg_label = ctk.CTkLabel(self.sidebar, image=self.bg_ctkimage, text="")
+            self.bg_label.pack(pady=10, padx=5)
+        except Exception as e:
+            print(f"Lỗi load logo: {e}")
 
-        self.bg_label = ctk.CTkLabel(self.sidebar, image=self.bg_ctkimage, text="")
-        self.bg_label.pack(pady=10, padx=5)
-        
-        self.btn_logout = self.ButtonTheme(self.sidebar, "Đăng xuất",font=("Bahnschrift", 12, "normal"),height=30, width=120, fg_color="#73B8E9", hover_color="blue", command=self.logout)
-        self.btn_logout.pack(pady=5, padx=5, anchor="s", fill="y")
-        
-    def clear_content(self):
-        """
-        Xóa tất cả các widget con khỏi khu vực nội dung (content frame).
+        # --- NÚT ĐĂNG XUẤT (Giữ nguyên) ---
+        self.btn_logout = self.ButtonTheme(
+            self.sidebar, 
+            "Đăng xuất",
+            font=AppFont.BODY_BOLD,
+            height=40, 
+            width=200,
+            anchor="center",
+            fg_color=ColorPalette.BLUE_INFO,  # Màu xanh dương nổi bật
+            command=self.logout
+        )
+        self.btn_logout.pack(pady=20, padx=20, anchor="s", side="bottom")
 
-        Phương thức này được sử dụng để dọn dẹp giao diện trước khi hiển thị một trang mới,
-        đảm bảo không có widget cũ nào còn sót lại.
-        """
-        for widget in self.content.winfo_children():
-            widget.destroy()
-            
-            
-    def logout(self):
-        """
-        Xử lý sự kiện đăng xuất (CHO CẤU TRÚC 1 CỬA SỔ)
+        # --- NÚT ĐỔI GIAO DIỆN (Thêm mới) ---
+        self.setup_theme_button()
         
-        Phương thức này sẽ hủy frame dashboard hiện tại và 
-        tái tạo lại frame đăng nhập (MainWindow) bên trong 'root'.
-        """
+    def setup_theme_button(self):
+        """Tạo nút đổi giao diện nổi bật"""
+        base_path = get_base_path()
+        icon_img = None
+        try:
+            # Em nhớ đổi tên file ảnh ở đây nếu khác
+            icon_path = os.path.join(base_path, "resources", "images", "icon_darkmode.png") 
+            if os.path.exists(icon_path):
+                 icon_img = ImageProcessor(icon_path).resize(24, 24).to_white_icon().to_ctkimage()
+        except:
+            pass
+
+        # Xác định Text và Icon dựa trên chế độ hiện tại
+        current_mode = ctk.get_appearance_mode()
+        is_dark = current_mode == "Dark"
+        text_btn = "Chế độ sáng" if is_dark else "Chế độ tối"
         
-        # Import local để tránh lỗi 'circular import' (lỗi nhập vòng)
+        # Nút dùng màu WARNING (Cam) hoặc INFO (Xanh) để nổi bật
+        self.btn_theme = self.ButtonTheme(
+            self.sidebar,
+            text=text_btn,
+            image=icon_img,
+            font=AppFont.BODY_BOLD,
+            height=40,
+            width=200,
+            anchor="center",
+            fg_color=Theme.Color.WARNING, # Màu cam nổi bật
+            hover_color="#F57C00",        # Màu hover cam đậm
+            text_color="white",
+            command=self.toggle_theme
+        )
+        self.btn_theme.pack(pady=(10, 0), padx=20, anchor="s", side="bottom")
+
+    def toggle_theme(self):
+        """Xử lý đổi theme và tự động đăng nhập lại"""
+        msg = "Để thay đổi giao diện, ứng dụng cần \n\n        ĐĂNG NHẬP LẠI\n\nđể tiếp tục!.\nBạn có muốn tiếp tục không?"
+        if messagebox.askyesno("Xác nhận đổi giao diện", msg):
+            # 1. Đảo ngược chế độ
+            current_mode = ctk.get_appearance_mode()
+            new_mode = "Light" if current_mode == "Dark" else "Dark"
+            
+            # 2. Lưu Theme mới vào Config
+            if self.AppConfig:
+                try:
+                    self.AppConfig.theme_mode = new_mode
+                    save_config(self.AppConfig)
+                except Exception as e:
+                    print(f"Lỗi lưu config theme: {e}")
+            
+            # 3. Gọi logout với cờ auto_login=True
+            self.logout(auto_login=True)
+
+    def logout(self, auto_login=False):
         from gui.main_window import MainWindow 
         
-        # 1. Xóa thông tin đăng nhập đã lưu
+        # 1. Xử lý lưu/xóa Config
         if self.AppConfig:
-            self.AppConfig.login_info.username = None
-            self.AppConfig.login_info.password = None
-            save_config(self.AppConfig)
+            # NẾU LÀ ĐĂNG XUẤT THẬT (auto_login=False): Xóa thông tin đã lưu trong RAM
+            if not auto_login:
+                self.AppConfig.login_info.username = None
+                self.AppConfig.login_info.password = None
+                # Lưu xuống file để lần sau mở app lên cũng không tự vào
+                save_config(self.AppConfig)
+            
+            # NẾU LÀ ĐỔI THEME (auto_login=True): Giữ nguyên info để tí nữa dùng lại
         
-        # 2. Lấy cửa sổ 'root' (chính là self.master)
+        # 2. Nạp lại Theme
+        if hasattr(self.AppConfig, "theme_mode"):
+            Theme.load_theme(self.AppConfig.theme_mode)
+
         root = self.master 
-        
-        # 3. Hủy frame Dashboard HIỆN TẠI (chính là 'self')
         self.destroy()
         
-        # 4. Tái tạo lại frame Đăng nhập (MainWindow)
+        # 3. Tạo lại màn hình đăng nhập
         app_login = MainWindow(master=root, config=self.AppConfig)
         app_login.pack(expand=True, fill="both")
         
-        # 5. Reset cửa sổ root về trạng thái đăng nhập
         root.state('normal')
         root.title("PHẦN MỀM ĐIỂM DANH")
-        root.geometry("1280x720") # Đặt lại kích thước cho màn hình login
-        root.resizable(False, False) # Khóa màn hình login
+        root.geometry("1280x720") 
+        root.resizable(False, False)
+
+        # 4. LOGIC TỰ ĐỘNG ĐĂNG NHẬP (Chỉ chạy khi auto_login=True)
+        if auto_login and self.AppConfig.login_info.username and self.AppConfig.login_info.password:
+            # Tự điền thông tin vào ô
+            app_login.username_entry.insert(0, self.AppConfig.login_info.username)
+            app_login.password_entry.insert(0, self.AppConfig.login_info.password)
+            app_login.check_save_login.select()
+            
+            # Tự bấm nút đăng nhập
+            app_login.start_login_process()

@@ -1,251 +1,199 @@
 from tkinter import messagebox
-from gui.base.base_view import BaseView
-import customtkinter as ctk
-from gui.base.utils import ImageProcessor, LoadingDialog
 import tkinter as tk
+import customtkinter as ctk
+import os
+import threading
+
+# Import Core & Base
+from gui.base.base_view import BaseView
+from gui.base.utils import ImageProcessor, LoadingDialog
+from core.theme_manager import Theme, AppFont
+from core.app_config import load_config, save_config
 import core.database 
-from core.utils import bcrypt_password, check_password
+from core.utils import get_base_path
+
+# Import Dashboard
 from gui.user.dashboard_lecturer import LecturerDashboard
 from gui.admin.dashboard_admin import AdminDashboard
-from core.app_config import load_config, save_config
-import threading 
-from core.utils import get_base_path  , resource_path
-import os
 
 class MainWindow(BaseView):
     def __init__(self, master, config):
-
+        # BaseView đã tự set màu nền theo Theme.Color.BG
         super().__init__(master) 
         self.AppConfig = config
-        
 
-        self.sidebar = ctk.CTkFrame(self, width=450, corner_radius=0, fg_color="#05243F")
+        # --- SIDEBAR (Bên trái) ---
+        self.sidebar = ctk.CTkFrame(self, width=450, corner_radius=0, 
+                                    fg_color=Theme.Color.SECONDARY) # Dùng màu Secondary (Xanh đậm hoặc Trắng)
         self.sidebar.pack(side="left", fill="y")
-        self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="#05243F")
+        
+        # --- CONTENT (Bên phải - Hình nền) ---
+        self.content = ctk.CTkFrame(self, corner_radius=0, fg_color=Theme.Color.BG)
         self.content.pack(side="right", fill="both", expand=True)
         
+        # Xử lý hình nền
         base_path = get_base_path()
-        self.bg_ctkimage = ImageProcessor(os.path.join(base_path, "resources","images","bg_main_window.png")) \
-                                .crop_to_aspect(1280, 720) \
-                                .resize(1280, 720) \
-                                .to_ctkimage(size=(1280,720))
-        self.bg_label = ctk.CTkLabel(self.content, image=self.bg_ctkimage, text="")
-        self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+        try:
+            self.bg_ctkimage = ImageProcessor(os.path.join(base_path, "resources","images","bg_main_window.png")) \
+                                    .crop_to_aspect(1280, 720) \
+                                    .resize(1280, 720) \
+                                    .to_ctkimage(size=(1280,720))
+            self.bg_label = ctk.CTkLabel(self.content, image=self.bg_ctkimage, text="")
+            self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+        except Exception as e:
+            print(f"Lỗi load ảnh nền: {e}")
+            
         self.setup_ui()
         self.password_entry.bind("<Return>", lambda event: self.start_login_process())
         
-        
     def setup_ui(self):
-        text_var_first = tk.StringVar(value="KHOA CÔNG NGHỆ THÔNG TIN\nTRƯỜNG ĐẠI HỌC NAM CẦN THƠ\n---------------\n\nĐỒ ÁN 2")
+        # 1. Tiêu đề trường
+        text_var_first = tk.StringVar(value="KHOA CÔNG NGHỆ THÔNG TIN\nTRƯỜNG ĐẠI HỌC NAM CẦN THƠ\n---------------\n\nĐỒ ÁN TỐT NGHIỆP")
         self.tittle_first_label = self.LabelFont(self.sidebar, text=text_var_first,
-                                                  font=("Bahnschrift", 20, "bold"),
-                                                  justify="center", bg_color="transparent",
-                                                  width=400, height=80, text_color="white")
+                                                  font=AppFont.H3, # Dùng Font Inter
+                                                  text_color=Theme.Color.TEXT,
+                                                  width=400, height=80)
         self.tittle_first_label.place(relx=0.5, rely=0.1, anchor="center")
         
-        
-
+        # 2. Tiêu đề phần mềm
         text_var = tk.StringVar(value="PHẦN MỀM ĐIỂM DANH")
         text_var2 = tk.StringVar(value="(Bằng công nghệ nhận dạng khuôn mặt)")
-        self.title_label = self.LabelFont(self.sidebar, text=text_var, font=("Bahnschrift", 30, "bold"),
-                                          justify="center", text_color="white", width=1280, height=50)
+        
+        self.title_label = self.LabelFont(self.sidebar, text=text_var, font=AppFont.H1, 
+                                          text_color=Theme.Color.PRIMARY, width=400, height=50) # Màu nhấn
         self.title_label.place(relx=0.5, rely=0.35, anchor="center")
         
-        self.tittle_label2 = self.LabelFont(self.sidebar, text=text_var2, font=("Bahnschrift", 13, "italic"), text_color="white")
+        self.tittle_label2 = self.LabelFont(self.sidebar, text=text_var2, font=AppFont.BODY_BOLD, 
+                                            text_color=Theme.Color.TEXT_SUB)
         self.tittle_label2.place(relx=0.5, rely=0.4, anchor="center")
 
-        
-        
+        # 3. Form đăng nhập
         self.username_entry = ctk.CTkEntry(self.sidebar, placeholder_text="Tên đăng nhập", 
-                                            width=200, height=40, font=("Bahnschrift", 16))
-        self.username_entry.place(relx=0.5, rely=0.5, anchor="center")  
+                                            width=250, height=45, font=AppFont.BODY,
+                                            border_color=Theme.Color.BORDER)
+        self.username_entry.place(relx=0.5, rely=0.5, anchor="center")
+          
         self.password_entry = ctk.CTkEntry(self.sidebar, placeholder_text="Mật khẩu", show="*", 
-                                            width=200, height=40, font=("Bahnschrift", 16))
-        self.password_entry.place(relx=0.5, rely=0.6, anchor="center")
+                                            width=250, height=45, font=AppFont.BODY,
+                                            border_color=Theme.Color.BORDER)
+        self.password_entry.place(relx=0.5, rely=0.58, anchor="center")
         
-        self.check_save_login = ctk.CTkCheckBox(self.sidebar, text="Lưu đăng nhập", text_color="white", command=self.on_check_save_login)
-        self.check_save_login.place(relx=0.5, rely=0.67, anchor="center")
+        self.check_save_login = ctk.CTkCheckBox(self.sidebar, text="Lưu đăng nhập", 
+                                                text_color=Theme.Color.TEXT, 
+                                                font=AppFont.BODY,
+                                                command=self.on_check_save_login)
+        self.check_save_login.place(relx=0.5, rely=0.65, anchor="center")
 
-        # CẢI TIẾN: Gọi hàm start_login_process thay vì on_login trực tiếp
-        # để hiển thị dialog loading và chạy trong luồng nền.
-        self.login_button = self.ButtonTheme(self.sidebar, "Đăng nhập",width=200, height=50, command=self.start_login_process)
+        # 4. Nút đăng nhập (Dùng hàm ButtonTheme đã tối ưu)
+        self.login_button = self.ButtonTheme(self.sidebar, "Đăng nhập", 
+                                             width=250, height=50, 
+                                             command=self.start_login_process)
         self.login_button.place(relx=0.5, rely=0.75, anchor="center")
 
+        # 5. Footer
         text_var_second = tk.StringVar(value="Sinh viên: NGUYỄN CHÁNH HIỆP \n Mã số sinh viên: 223408 \n Lớp: 22TIN-TT \n\n Tháng 6/2025")
         self.tittle_second_label = self.LabelFont(self.sidebar, text=text_var_second,
-                                                  font=("Bahnschrift", 15, "bold"),
-                                                  justify="center", bg_color="transparent",
-                                                  width=400, height=80, text_color="white")
+                                                  font=AppFont.SMALL,
+                                                  text_color=Theme.Color.TEXT_SUB,
+                                                  width=400, height=80)
         self.tittle_second_label.place(relx=0.5, rely=0.9, anchor="center")
-        
-    # Kiểm tra kết nối cơ sở dữ liệu
+
     def check_database_connection(self):
         value, e = core.database.test_connection(self.AppConfig.database)
         if not value:
-            self.show_message("LỖI KẾT NỐI", 
-                            f"KẾT NỐI CỦA BẠN KHÔNG KHẢ DỤNG\n\nMã lỗi: {e}\n\nVui lòng kiểm tra lại mạng và thử lại.\n"
-                            "(Hoặc liên hệ với quản trị viên hệ thống để được hỗ trợ).")
+            self.show_message("LỖI KẾT NỐI", f"Không thể kết nối Database.\nLỗi: {e}")
             return False
         return True
 
-    # --- HÀM MỚI ĐỂ XỬ LÝ ĐĂNG NHẬP THỦ CÔNG ---
     def start_login_process(self):
-        """
-        Hàm này được gọi khi người dùng nhấn nút "Đăng nhập".
-        Nó sẽ hiển thị LoadingDialog và bắt đầu quá trình đăng nhập trong luồng nền.
-        """
         username = self.username_entry.get()
         password = self.password_entry.get()
     
         if not username or not password:
             self.show_message("Thiếu thông tin", "Vui lòng nhập tên đăng nhập và mật khẩu.")
             return
-        # 1. Xác thực thông tin đăng nhập trước
-        # 1.1 Kiểm tra kết nối cơ sở dữ liệu
-        if not self.check_database_connection():
-            return
-        result = core.database.login(username, password)
-    
-        if result is False:
-            # Nếu sai, chỉ hiển thị thông báo lỗi và không làm gì thêm
-            self.show_message("Thao tác không thành công!", "Sai mật khẩu hoặc tên tài khoản.\nVUI LÒNG THỬ LẠI!")
-            self.password_entry.delete(0, 'end') # Chỉ xóa mật khẩu
-            self.username_entry.focus_set()
-        else:
-            # 2. Nếu đúng, hiển thị dialog và bắt đầu tải dashboard trong luồng nền
-            loading_dialog = LoadingDialog(self.master, "Đăng nhập thành công, đang tải...", mode="indeterminate", temp_topmost_off=True)
-            self.master.withdraw()
-            self.master.update_idletasks()
-    
-            def on_load_done(success):
-                """Callback để đóng dialog khi tải xong."""
-                self.master.after(0, loading_dialog.stop)
-            threading.Thread(target=lambda: self.on_login(username, password, on_load_done), daemon=True).start()
 
+        # Hiển thị loading trước khi xử lý nặng
+        loading = LoadingDialog(self.master, "Đang xác thực...", mode="indeterminate")
+        
+        # Chạy logic đăng nhập ở luồng phụ
+        threading.Thread(target=lambda: self._thread_login(username, password, loading), daemon=True).start()
 
-    def on_login(self, username, password, on_done_callback=None):
-        """Xử lý sự kiện khi nút đăng nhập được nhấn."""
-        # Kiểm tra kết nối cơ sở dữ liệu
+    def _thread_login(self, username, password, loading_dialog):
+        """Hàm xử lý logic đăng nhập (Chạy ngầm)"""
         if not self.check_database_connection():
+            loading_dialog.stop()
             return
+
         result = core.database.login(username, password)
         
+        # Quay lại luồng chính để cập nhật UI
+        self.master.after(0, lambda: self._post_login(result, username, password, loading_dialog))
 
+    def _post_login(self, result, username, password, loading_dialog):
+        """Hàm xử lý kết quả đăng nhập (Chạy trên luồng chính)"""
+        loading_dialog.stop()
+        
         if result is False:
-            # Phần này giờ chỉ xử lý cho đăng nhập tự động thất bại
-            # Không cần hiển thị messagebox ở đây nữa vì luồng tự động sẽ tự mở lại cửa sổ login
-            # Nếu đăng nhập thất bại, gọi callback ngay trên luồng chính
-            if on_done_callback: self.master.after(0, on_done_callback, False)
+            self.show_message("Đăng nhập thất bại", "Sai tài khoản hoặc mật khẩu.")
+            self.password_entry.delete(0, 'end')
+            self.username_entry.focus_set()
         else:
             user_id, role = result
-            try:
-                self.master.after(0, self.destroy) # Hủy frame login trên luồng chính
-                
-                if role == "giangvien":
-                    lecturer_dashboard = LecturerDashboard(self.master, user_id, config=self.AppConfig)
-                    lecturer_dashboard.pack(expand=True, fill="both")
-                    self.master.title("Dashboard Giảng Viên")
-                else:
-                    admin_dashboard = AdminDashboard(self.master, user_id, config=self.AppConfig)
-                    admin_dashboard.pack(expand=True, fill="both")
-                    self.master.title("Dashboard Quản Trị Viên")
+            self.open_dashboard(user_id, role)
 
-                # --- LOGIC PHÓNG TO ĐƠN GIẢN HÓA ---
-                
-                # 1. Reset min/max size để cho phép cửa sổ thay đổi kích thước
-                self.master.minsize(0, 0)
-                self.master.maxsize(9999, 9999) # Hoặc một giá trị đủ lớn
+    def open_dashboard(self, user_id, role):
+        """Chuyển cảnh sang Dashboard"""
+        self.master.withdraw() # Ẩn login
+        self.master.minsize(0, 0)
+        self.master.maxsize(9999, 9999)
+        self.master.resizable(True, True)
+        self.master.state('zoomed')
+        
+        # Xóa frame login cũ để giải phóng bộ nhớ (Optional)
+        self.destroy()
 
-                # 2. Mở khóa resizable
-                self.master.resizable(True, True) 
-                
-                # 3. Phóng to cửa sổ
-                self.master.state('zoomed')
-                self.master.attributes('-topmost', False) # Đảm bảo dashboard không chiếm vị trí cao nhất
-                # Nếu thành công, gọi callback
-                if on_done_callback: self.master.after(0, on_done_callback, True)
-    
-            except Exception as e:
-                self.show_message("Lỗi", f"Đăng nhập thất bại.\n{e}")
-                # Nếu có lỗi, gọi callback
-                if on_done_callback: self.master.after(0, on_done_callback, False)
-                if self.master:
-                    self.master.quit()
+        if role == "giangvien":
+            app = LecturerDashboard(self.master, user_id, config=self.AppConfig)
+            self.master.title("Dashboard Giảng Viên")
+        else:
+            app = AdminDashboard(self.master, user_id, config=self.AppConfig)
+            self.master.title("Dashboard Quản Trị Viên")
+            
+        app.pack(expand=True, fill="both")
 
     def on_check_save_login(self):
-        """Xử lý sự kiện khi checkbox lưu đăng nhập được thay đổi."""
         if self.check_save_login.get():
-            username = self.username_entry.get()
-            password = self.password_entry.get()
-            if username and password:
-                self.AppConfig.login_info.username = username
-                self.AppConfig.login_info.password = password
-                save_config(self.AppConfig)
-            else:
-                messagebox.showwarning("CẢNH BÁO HỆ THỐNG", "Không thể lưu đăng nhập khi chưa có tên đăng nhập hoặc mật khẩu!")
-                self.check_save_login.deselect()
-                
+            self.AppConfig.login_info.username = self.username_entry.get()
+            self.AppConfig.login_info.password = self.password_entry.get()
         else:
             self.AppConfig.login_info.username = None
             self.AppConfig.login_info.password = None
-            save_config(self.AppConfig)
-            
+        save_config(self.AppConfig)
 
+# --- PHẦN KHỞI CHẠY (Giữ nguyên logic cũ nhưng gọn hơn) ---
 def runapp(config):
-    ctk.set_appearance_mode("light")
-    ctk.set_default_color_theme("green")
+    # Khởi tạo Theme lần đầu
+    current_theme = getattr(config, "theme_mode", "Light")
+    Theme.load_theme(current_theme)
+    
     root = ctk.CTk()
-    
-    # --- THIẾT LẬP CỬA SỔ LOGIN BAN ĐẦU ---
     root.title("PHẦN MỀM ĐIỂM DANH")
-    root.geometry("1280x720")      # Kích thước cố định
-    root.resizable(False, False)  # Khóa cửa sổ login
-    # ---
-    
-    root.withdraw() # Tạm ẩn cửa sổ chính
+    root.geometry("1280x720")
+    root.resizable(False, False)
     
     app = MainWindow(master=root, config=config)
-    app.pack(expand=True, fill="both") 
+    app.pack(expand=True, fill="both")
     
+    # Logic tự động đăng nhập
     username = config.login_info.username
     password = config.login_info.password
-
-    # --- CẢI TIẾN: Logic hiển thị cửa sổ và loading dialog ---
-    loading_dialog = None
-
-
-    def show_login_window():
-        root.deiconify() 
-        root.lift()
-        root.focus_force()
-        root.attributes('-topmost', True)
-        root.after(100, lambda: root.attributes('-topmost', False))
-        
-
-
+    
     if username and password:
-        # --- CẢI TIẾN LOGIC HIỂN THỊ ---
-        # 1. Tạo LoadingDialog trước. Cửa sổ root sẽ tự động hiện ra do có Toplevel con,
-        # nhưng vì nó trống và LoadingDialog nằm trên nên sẽ không thấy.
-        loading_dialog = LoadingDialog(root, "Đang Đăng Nhập", mode="indeterminate", height_progress=20, temp_topmost_off=True)
-        root.withdraw() # Đảm bảo cửa sổ chính được ẩn ngay cả khi CTkToplevel tự động hiển thị nó
-        # 2. Ép Tkinter phải vẽ LoadingDialog ngay lập tức.
-        root.update_idletasks()
-
-        def on_auto_login_done(success):
-            """Callback được gọi khi quá trình đăng nhập tự động hoàn tất."""
-            if success:
-                # Nếu thành công, on_login đã mở Dashboard, chỉ cần đóng dialog.
-                if loading_dialog: loading_dialog.stop()
-            else:
-                # Nếu thất bại, đóng dialog và hiển thị cửa sổ đăng nhập.
-                if loading_dialog: loading_dialog.stop()
-                show_login_window()
-
-        # 3. Sau khi dialog đã hiển thị, mới bắt đầu luồng đăng nhập.
-        threading.Thread(target=lambda: app.on_login(username, password, on_auto_login_done), daemon=True).start()
-    else:
-        # Nếu không có lưu đăng nhập, hiển thị cửa sổ login ngay
-        root.after(200, show_login_window)
-
+        # Nếu có lưu mật khẩu, tự động điền và bấm đăng nhập
+        app.username_entry.insert(0, username)
+        app.password_entry.insert(0, password)
+        app.check_save_login.select()
+        app.start_login_process()
+    
     root.mainloop()

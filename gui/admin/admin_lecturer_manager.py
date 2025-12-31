@@ -1,248 +1,99 @@
-# (Đặt ở đầu file admin_lecturer_manager.py)
 import customtkinter as ctk
 from tkinter import ttk, messagebox
-import tkinter as tk
-from datetime import datetime, date
 from gui.base.base_frame import BaseFrame
 from gui.base.base_datepicker import DatePicker
 from gui.base.utils import *
 import core.database as db
+from core.theme_manager import Theme, AppFont
 from mysql.connector import Error
 
 class AdminLecturerManager(BaseFrame):
     def __init__(self, master=None, user=None, **kwargs):
+        kwargs['fg_color'] = Theme.Color.BG 
         super().__init__(master, **kwargs)
         self.user = user
         self.set_label_title("Dashboard > Trang Chủ > QUẢN LÝ GIẢNG VIÊN & KHOA")
+        # [GIỮ NGUYÊN CÁC BIẾN INIT VÀ TRY/EXCEPT NHƯ CŨ]
+        self.khoa_list = {}; self.giangvien_list = {}
+        self.selected_khoa_id = None; self.selected_gv_id = None; self.collapsible_frames = []
+        try: db.connect_db(); self.setup_ui(); self.load_all_combobox_data(); self._load_initial_lecturer_data(); self._load_khoa_data()
+        except Exception as e: messagebox.showerror("Lỗi", f"{e}")
 
-        # --- Cache dữ liệu ---
-        self.khoa_list = {}      # {MaKhoa: TenKhoa}
-        self.giangvien_list = {} # {MaGV: TenGV} - Chỉ để tham khảo, không dùng cho combobox GV
-
-        # --- Trạng thái chọn ---
-        self.selected_khoa_id = None # MaKhoa
-        self.selected_gv_id = None   # MaGV
-
-        self.collapsible_frames = []
-
-        try:
-            db.connect_db() # Chỉ kiểm tra kết nối
-            self.setup_ui()
-            self.load_all_combobox_data()
-            self._load_initial_lecturer_data() # Load bảng GV ban đầu
-            self._load_khoa_data() # Load bảng Khoa ban đầu
-        except Error as e:
-             messagebox.showerror("Lỗi kết nối CSDL", f"Không thể kết nối CSDL: {e}\nVui lòng kiểm tra cấu hình.")
-             # Disable widgets nếu lỗi kết nối
-             for child in self.winfo_children():
-                try: child.configure(state="disabled")
-                except tk.TclError: pass
-        except Exception as e:
-             messagebox.showerror("Lỗi khởi tạo", f"Lỗi không xác định: {e}")
-
-    # ===================================================================
-    # SETUP UI
-    # ===================================================================
     def setup_ui(self):
         self.content_frame.grid_columnconfigure(0, weight=1)
-        self.content_frame.grid_rowconfigure(0, weight=0) # Hàng 0 (collapsible)
-        self.content_frame.grid_rowconfigure(1, weight=1) # Hàng 1 (bảng chính)
-
-        top_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        top_frame.grid(row=0, column=0, padx=0, pady=0, sticky="new")
+        self.content_frame.grid_rowconfigure(1, weight=1)
+        top_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent"); top_frame.grid(row=0, column=0, sticky="new")
         top_frame.grid_columnconfigure(0, weight=1)
+        main_table_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent"); main_table_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nsew")
+        main_table_frame.grid_columnconfigure(0, weight=1); main_table_frame.grid_rowconfigure(1, weight=1)
+        
+        self._create_main_lecturer_table_view(main_table_frame)
+        
+        s1 = CollapsibleFrame(top_frame, title="1. Quản lý Giảng viên", color=Theme.Color.BG_CARD, controller=self); s1.grid(row=0, column=0, sticky="new", pady=(0,5))
+        self.collapsible_frames.append(s1); self._create_lecturer_section(s1.content_frame)
+        
+        s2 = CollapsibleFrame(top_frame, title="2. Quản lý Khoa", color=Theme.Color.BG_CARD, controller=self); s2.grid(row=1, column=0, sticky="new", pady=(0,5))
+        self.collapsible_frames.append(s2); self._create_department_section(s2.content_frame)
 
-        main_table_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        main_table_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nsew")
-        main_table_frame.grid_columnconfigure(0, weight=1)
-        main_table_frame.grid_rowconfigure(1, weight=1)
-        self._create_main_lecturer_table_view(main_table_frame) # Tạo bảng GV chính
-
-        # Mục 1: Quản lý Giảng viên
-        section_lecturer_manager = CollapsibleFrame(top_frame, title="1. Quản lý Giảng viên", color="#E0F7FA", controller=self)
-        section_lecturer_manager.grid(row=0, column=0, sticky="new", pady=(0,5))
-        self.collapsible_frames.append(section_lecturer_manager)
-        self._create_lecturer_section(section_lecturer_manager.content_frame)
-
-        # Mục 2: Quản lý Khoa
-        section_department_manager = CollapsibleFrame(top_frame, title="2. Quản lý Khoa", color="#FFF9C4", controller=self)
-        section_department_manager.grid(row=1, column=0, sticky="new", pady=(0,5))
-        self.collapsible_frames.append(section_department_manager)
-        self._create_department_section(section_department_manager.content_frame)
-
-    def on_expand(self, expanded_frame):
+    def on_expand(self, f):
         for frame in self.collapsible_frames:
-            if frame is not expanded_frame and frame.is_expanded:
-                frame.collapse()
+            if frame is not f and frame.is_expanded: frame.collapse()
 
-    # ===================================================================
-    # TẠO CÁC PHẦN UI CON
-    # ===================================================================
+    def _create_lecturer_section(self, p):
+        p.configure(fg_color="transparent"); p.grid_columnconfigure((0, 1, 2), weight=1)
+        ctk.CTkLabel(p, text="Thông tin giảng viên:", font=AppFont.BODY_BOLD, text_color=Theme.Color.TEXT).grid(row=0, column=0, columnspan=3, pady=(5,10), sticky="w")
+        def lbl(r, c, txt): ctk.CTkLabel(p, text=txt, font=AppFont.BODY).grid(row=r, column=c, padx=10, sticky="w")
+        
+        lbl(1, 0, "Mã GV:"); self.gv_id_entry = ctk.CTkEntry(p, placeholder_text="Nhập mã...", width=150); self.gv_id_entry.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        lbl(1, 1, "Họ và Tên:"); self.gv_name_entry = ctk.CTkEntry(p, placeholder_text="Nhập tên...", width=250); self.gv_name_entry.grid(row=2, column=1, columnspan=2, padx=10, pady=5, sticky="w")
+        lbl(3, 0, "Năm Sinh:"); self.gv_dob_datepicker = DatePicker(p, width=150); self.gv_dob_datepicker.set_date_format("%Y-%m-%d"); self.gv_dob_datepicker.grid(row=4, column=0, padx=10, pady=5, sticky="w")
+        lbl(3, 1, "Số ĐT:"); self.gv_phone_entry = ctk.CTkEntry(p, width=150); self.gv_phone_entry.grid(row=4, column=1, padx=10, pady=5, sticky="w")
+        lbl(3, 2, "Khoa:"); self.gv_khoa_cbx = ComboboxTheme(p, values=[], width=200); self.gv_khoa_cbx.grid(row=4, column=2, padx=10, pady=5, sticky="w")
+        lbl(5, 0, "Ghi Chú:"); self.gv_note_entry = ctk.CTkEntry(p, width=300); self.gv_note_entry.grid(row=6, column=0, columnspan=3, padx=10, pady=5, sticky="we")
 
-    def _create_lecturer_section(self, parent_frame):
-        """Tạo UI cho mục 'Quản lý Giảng viên'."""
-        parent_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        btn = ctk.CTkFrame(p, fg_color="transparent"); btn.grid(row=7, column=0, columnspan=3, pady=10, padx=5, sticky="w")
+        ButtonTheme(btn, text="Tìm GV", fg_color=Theme.Color.WARNING, width=100, command=self._search_lecturer).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Thêm GV", fg_color=Theme.Color.SUCCESS, width=100, command=self._add_lecturer).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Cập nhật", fg_color=Theme.Color.INFO, width=100, command=self._update_lecturer).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Xoá GV", fg_color=Theme.Color.DANGER, hover_color="#B71C1C", width=100, command=self._delete_lecturer).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Làm mới", fg_color=Theme.Color.NEUTRAL, width=100, command=self._clear_lecturer_form).pack(side="left", padx=5)
 
-        ctk.CTkLabel(parent_frame, text="Thông tin giảng viên:", font=("Bahnschrift", 16, "bold")).grid(row=0, column=0, columnspan=3, padx=10, pady=(5,10), sticky="w")
-
-        # --- Hàng 1: Mã GV (Nhập/Tìm), Họ Tên ---
-        ctk.CTkLabel(parent_frame, text="Mã Giảng viên (Tìm kiếm/Thêm/Sửa):", font=("Bahnschrift", 12)).grid(row=1, column=0, padx=(10,2), pady=(0,2), sticky="w")
-        self.gv_id_entry = ctk.CTkEntry(parent_frame, placeholder_text="Nhập Mã GV...", width=150)
-        self.gv_id_entry.grid(row=2, column=0, padx=(10,2), pady=(0,5), sticky="w")
-
-        ctk.CTkLabel(parent_frame, text="Họ và Tên:", font=("Bahnschrift", 12)).grid(row=1, column=1, padx=2, pady=(0,2), sticky="w")
-        self.gv_name_entry = ctk.CTkEntry(parent_frame, placeholder_text="Nhập họ và tên...", width=250)
-        self.gv_name_entry.grid(row=2, column=1, columnspan=2, padx=2, pady=(0,5), sticky="w") # Kéo dài ô tên
-
-        # --- Hàng 2: Năm Sinh, SĐT, Khoa ---
-        ctk.CTkLabel(parent_frame, text="Năm Sinh:", font=("Bahnschrift", 12)).grid(row=3, column=0, padx=(10,2), pady=(0,2), sticky="w")
-        self.gv_dob_datepicker = DatePicker(parent_frame, width=150)
-        self.gv_dob_datepicker.set_date_format("%Y-%m-%d") # Format SQL
-        self.gv_dob_datepicker.grid(row=4, column=0, padx=(10,2), pady=(0,5), sticky="w")
-
-        ctk.CTkLabel(parent_frame, text="Số Điện Thoại:", font=("Bahnschrift", 12)).grid(row=3, column=1, padx=2, pady=(0,2), sticky="w")
-        self.gv_phone_entry = ctk.CTkEntry(parent_frame, placeholder_text="Nhập SĐT...", width=150)
-        self.gv_phone_entry.grid(row=4, column=1, padx=2, pady=(0,5), sticky="w")
-
-        ctk.CTkLabel(parent_frame, text="Thuộc Khoa:", font=("Bahnschrift", 12)).grid(row=3, column=2, padx=2, pady=(0,2), sticky="w")
-        self.gv_khoa_cbx = ComboboxTheme(parent_frame, values=[], width=200) # Load từ khoa_list
-        self.gv_khoa_cbx.grid(row=4, column=2, padx=2, pady=(0,5), sticky="w")
-
-        # --- Hàng 3: Ghi chú ---
-        ctk.CTkLabel(parent_frame, text="Ghi Chú:", font=("Bahnschrift", 12)).grid(row=5, column=0, padx=(10,2), pady=(0,2), sticky="w")
-        self.gv_note_entry = ctk.CTkEntry(parent_frame, placeholder_text="Nhập ghi chú...", width=300)
-        self.gv_note_entry.grid(row=6, column=0, columnspan=3, padx=(10,2), pady=(0,5), sticky="we")
-
-        # --- Hàng 4: Nút bấm ---
-        btn_frame_gv = ctk.CTkFrame(parent_frame, fg_color="transparent")
-        btn_frame_gv.grid(row=7, column=0, columnspan=3, pady=10, padx=5, sticky="w")
-
-        self.gv_search_btn = ctk.CTkButton(btn_frame_gv, text="Tìm GV", fg_color="#ff9800", hover_color="#e68a00", width=100, command=self._search_lecturer)
-        self.gv_search_btn.pack(side="left", padx=5)
-        self.gv_add_btn = ctk.CTkButton(btn_frame_gv, text="Thêm GV", fg_color="#4CAF50", hover_color="#45A049", width=100, command=self._add_lecturer)
-        self.gv_add_btn.pack(side="left", padx=5)
-        self.gv_update_btn = ctk.CTkButton(btn_frame_gv, text="Cập nhật GV", fg_color="#2196F3", hover_color="#2f61d6b9", width=100, command=self._update_lecturer)
-        self.gv_update_btn.pack(side="left", padx=5)
-        self.gv_delete_btn = ctk.CTkButton(btn_frame_gv, text="Xoá GV", fg_color="#f44336", hover_color="#da190b", width=100, command=self._delete_lecturer)
-        self.gv_delete_btn.pack(side="left", padx=5)
-        self.gv_clear_btn = ctk.CTkButton(btn_frame_gv, text="Làm mới Form", fg_color="#607D8B", hover_color="#546E7A", width=100, command=self._clear_lecturer_form)
-        self.gv_clear_btn.pack(side="left", padx=5)
-
-        ctk.CTkLabel(parent_frame, text="(*) Nhập Mã GV rồi nhấn 'Tìm GV'.\n(*) Dùng các ô dưới để thêm/sửa/xoá (chọn GV từ bảng dưới để sửa/xoá).", font=("Bahnschrift", 11), text_color="blue", justify="left").grid(row=8, column=0, columnspan=3, padx=10, pady=(0,5), sticky="w")
-
-
-    def _create_department_section(self, parent_frame):
-        """Tạo UI cho mục 'Quản lý Khoa'."""
-        parent_frame.grid_columnconfigure(0, weight=1) # Cột trái cho input/button
-        parent_frame.grid_columnconfigure(1, weight=1) # Cột phải cho treeview
-        parent_frame.grid_rowconfigure(0, weight=1)
-
-        # --- Khung trái ---
-        left_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
-        left_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        left_frame.grid_columnconfigure(0, weight=1) # Cho phép entry co giãn
-
-        ctk.CTkLabel(left_frame, text="Thông tin khoa:", font=("Bahnschrift", 16, "bold")).grid(row=0, column=0, columnspan=2, padx=5, pady=(5,10), sticky="w")
-
-        ctk.CTkLabel(left_frame, text="Mã Khoa:", font=("Bahnschrift", 12)).grid(row=1, column=0, padx=5, pady=(0,2), sticky="w")
-        self.khoa_id_entry = ctk.CTkEntry(left_frame, placeholder_text="Nhập Mã Khoa (VD: CNTT)...", width=150)
-        self.khoa_id_entry.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
-
-        ctk.CTkLabel(left_frame, text="Tên Khoa:", font=("Bahnschrift", 12)).grid(row=3, column=0, padx=5, pady=(0,2), sticky="w")
-        self.khoa_name_entry = ctk.CTkEntry(left_frame, placeholder_text="Nhập tên khoa...")
-        self.khoa_name_entry.grid(row=4, column=0, columnspan=2, padx=5, pady=(0,5), sticky="ew") # Co giãn theo chiều ngang
-
-        ctk.CTkLabel(left_frame, text="Ghi Chú:", font=("Bahnschrift", 12)).grid(row=5, column=0, padx=5, pady=(0,2), sticky="w")
-        self.khoa_note_entry = ctk.CTkEntry(left_frame, placeholder_text="Nhập ghi chú...")
-        self.khoa_note_entry.grid(row=6, column=0, columnspan=2, padx=5, pady=(0,5), sticky="ew")
-
-        btn_frame_khoa = ctk.CTkFrame(left_frame, fg_color="transparent")
-        btn_frame_khoa.grid(row=7, column=0, columnspan=2, pady=10, sticky="w")
-
-        self.khoa_add_btn = ctk.CTkButton(btn_frame_khoa, text="Thêm Khoa", fg_color="#4CAF50", hover_color="#45A049", width=120, command=self._add_department)
-        self.khoa_add_btn.pack(side="left", padx=5)
-        self.khoa_update_btn = ctk.CTkButton(btn_frame_khoa, text="Cập nhật Khoa", fg_color="#2196F3", hover_color="#2f61d6b9", width=120, command=self._update_department)
-        self.khoa_update_btn.pack(side="left", padx=5)
-        self.khoa_delete_btn = ctk.CTkButton(btn_frame_khoa, text="Xoá Khoa", fg_color="#f44336", hover_color="#da190b", width=120, command=self._delete_department)
-        self.khoa_delete_btn.pack(side="left", padx=5)
-        self.khoa_clear_btn = ctk.CTkButton(btn_frame_khoa, text="Làm mới Form", fg_color="#607D8B", hover_color="#546E7A", width=120, command=self._clear_department_form)
-        self.khoa_clear_btn.pack(side="left", padx=5)
-
-        ctk.CTkLabel(left_frame, text="(*) Chọn Khoa từ bảng bên phải để sửa/xoá.", font=("Bahnschrift", 11), text_color="blue", justify="left").grid(row=8, column=0, columnspan=2, padx=5, pady=(0,5), sticky="w")
-
-        # --- Khung phải (Treeview Khoa) ---
-        right_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
-        right_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        right_frame.grid_rowconfigure(0, weight=1)
-        right_frame.grid_columnconfigure(0, weight=1)
-
-        khoa_cols = ("ma_khoa", "ten_khoa", "ghi_chu")
-        self.khoa_tree = ttk.Treeview(right_frame, columns=khoa_cols, show="headings", height=8)
-        self.khoa_tree.grid(row=0, column=0, sticky="nsew")
-
-        self.khoa_tree.heading("ma_khoa", text="Mã Khoa")
-        self.khoa_tree.heading("ten_khoa", text="Tên Khoa")
-        self.khoa_tree.heading("ghi_chu", text="Ghi Chú")
-        self.khoa_tree.column("ma_khoa", width=100, anchor="w", stretch=False)
-        self.khoa_tree.column("ten_khoa", width=250, anchor="w")
-        self.khoa_tree.column("ghi_chu", width=200, anchor="w")
-
-        khoa_scrollbar = ttk.Scrollbar(right_frame, orient="vertical", command=self.khoa_tree.yview)
-        khoa_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.khoa_tree.configure(yscrollcommand=khoa_scrollbar.set)
-
+    def _create_department_section(self, p):
+        p.configure(fg_color="transparent"); p.grid_columnconfigure(0, weight=1); p.grid_columnconfigure(1, weight=1)
+        left = ctk.CTkFrame(p, fg_color="transparent"); left.grid(row=0, column=0, padx=10, sticky="nsew")
+        ctk.CTkLabel(left, text="Thông tin khoa:", font=AppFont.BODY_BOLD).grid(row=0, column=0, pady=5, sticky="w")
+        
+        ctk.CTkLabel(left, text="Mã Khoa:", font=AppFont.BODY).grid(row=1, column=0, sticky="w")
+        self.khoa_id_entry = ctk.CTkEntry(left, width=150); self.khoa_id_entry.grid(row=2, column=0, pady=5, sticky="w")
+        ctk.CTkLabel(left, text="Tên Khoa:", font=AppFont.BODY).grid(row=3, column=0, sticky="w")
+        self.khoa_name_entry = ctk.CTkEntry(left, width=250); self.khoa_name_entry.grid(row=4, column=0, pady=5, sticky="w")
+        ctk.CTkLabel(left, text="Ghi Chú:", font=AppFont.BODY).grid(row=5, column=0, sticky="w")
+        self.khoa_note_entry = ctk.CTkEntry(left, width=250); self.khoa_note_entry.grid(row=6, column=0, pady=5, sticky="w")
+        
+        btn = ctk.CTkFrame(left, fg_color="transparent"); btn.grid(row=7, column=0, pady=10, sticky="w")
+        ButtonTheme(btn, text="Thêm", fg_color=Theme.Color.SUCCESS, width=80, command=self._add_department).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Sửa", fg_color=Theme.Color.INFO, width=80, command=self._update_department).pack(side="left", padx=5)
+        ButtonTheme(btn, text="Xóa", fg_color=Theme.Color.DANGER, width=80, command=self._delete_department).pack(side="left", padx=5)
+        
+        right = ctk.CTkFrame(p, fg_color="transparent"); right.grid(row=0, column=1, padx=10, sticky="nsew")
+        self.khoa_tree = ttk.Treeview(right, columns=("ma", "ten", "ghichu"), show="headings", height=6); self.khoa_tree.pack(expand=True, fill="both")
+        self.khoa_tree.heading("ma", text="Mã"); self.khoa_tree.heading("ten", text="Tên Khoa")
         self.khoa_tree.bind("<<TreeviewSelect>>", self._select_khoa_tree)
 
-    def _create_main_lecturer_table_view(self, parent_frame):
-        """Tạo UI cho phần Bảng hiển thị thông tin Giảng viên chính."""
-        frame_label_table = ctk.CTkFrame(parent_frame, fg_color="transparent")
-        frame_label_table.grid(row=0, column=0, padx=5, pady=(0,5), sticky="ew")
-        frame_label_table.grid_columnconfigure(0, weight=1)
-        frame_label_table.grid_columnconfigure(1, weight=0)
-
-        LabelCustom(frame_label_table, text="BẢNG HIỂN THỊ THÔNG TIN GIẢNG VIÊN", value="(*) Hiển thị toàn bộ giảng viên hoặc kết quả tìm kiếm/lọc.", wraplength=600 ).grid(row=0, column=0, padx=10, pady=0, sticky="w")
-
-        frame_filter_controls = ctk.CTkFrame(frame_label_table, fg_color="transparent")
-        frame_filter_controls.grid(row=0, column=1, padx=10, pady=0, sticky="e")
-
-        self.filter_khoa_cbx = ComboboxTheme(frame_filter_controls, values=["Tất cả Khoa"], width=180)
-        self.filter_khoa_cbx.grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.filter_khoa_cbx.set("Tất cả Khoa")
-
-        self.filter_lecturer_table_btn = ButtonTheme(frame_filter_controls, text="Lọc", width=80, height=28, command=self._filter_lecturers_by_khoa)
-        self.filter_lecturer_table_btn.grid(row=0, column=1, padx=5, pady=5, sticky="e")
-        self.refresh_lecturer_table_btn = ButtonTheme(frame_filter_controls, text="Làm mới", width=100, height=28, fg_color="#757575", hover_color="#616161", command=self._refresh_lecturer_table)
-        self.refresh_lecturer_table_btn.grid(row=0, column=2, padx=5, pady=5, sticky="e")
-
-        table_container_frame = ctk.CTkFrame(parent_frame, fg_color="white")
-        table_container_frame.grid(row=1, column=0, padx=5, pady=(0,5), sticky="nsew")
-        table_container_frame.grid_columnconfigure(0, weight=1)
-        table_container_frame.grid_rowconfigure(0, weight=1)
-
-        lecturer_cols = ("ma_gv", "ten_gv", "sdt", "nam_sinh", "ten_khoa", "ghi_chu")
-        self.lecturer_table = ttk.Treeview(table_container_frame, columns=lecturer_cols, show="headings")
-        self.lecturer_table.grid(row=0, column=0, sticky="nsew")
-
-        self.lecturer_table.heading("ma_gv", text="Mã GV")
-        self.lecturer_table.heading("ten_gv", text="Họ và Tên")
-        self.lecturer_table.heading("sdt", text="SĐT")
-        self.lecturer_table.heading("nam_sinh", text="Năm Sinh")
-        self.lecturer_table.heading("ten_khoa", text="Khoa")
-        self.lecturer_table.heading("ghi_chu", text="Ghi Chú")
-
-        self.lecturer_table.column("ma_gv", width=80, anchor="center", stretch=False)
-        self.lecturer_table.column("ten_gv", width=250, anchor="w")
-        self.lecturer_table.column("sdt", width=120, anchor="center")
-        self.lecturer_table.column("nam_sinh", width=100, anchor="center", stretch=False)
-        self.lecturer_table.column("ten_khoa", width=200, anchor="w")
-        self.lecturer_table.column("ghi_chu", width=300, anchor="w")
-
-        lecturer_scrollbar = ttk.Scrollbar(table_container_frame, orient="vertical", command=self.lecturer_table.yview)
-        lecturer_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.lecturer_table.configure(yscrollcommand=lecturer_scrollbar.set)
-
+    def _create_main_lecturer_table_view(self, p):
+        head = ctk.CTkFrame(p, fg_color="transparent"); head.pack(fill="x", pady=5)
+        LabelCustom(head, text="DANH SÁCH GIẢNG VIÊN", font_size=16, font_weight="bold", text_color=Theme.Color.PRIMARY).pack(side="left", padx=10)
+        
+        ButtonTheme(head, text="Refresh", width=80, height=28, fg_color=Theme.Color.NEUTRAL, command=self._refresh_lecturer_table).pack(side="right", padx=5)
+        ButtonTheme(head, text="Lọc", width=70, height=28, command=self._filter_lecturers_by_khoa).pack(side="right", padx=5)
+        self.filter_khoa_cbx = ComboboxTheme(head, values=["Tất cả Khoa"], width=180); self.filter_khoa_cbx.pack(side="right", padx=5); self.filter_khoa_cbx.set("Tất cả Khoa")
+        
+        table = ctk.CTkFrame(p, fg_color=Theme.Color.BG_CARD); table.pack(fill="both", expand=True, padx=5, pady=5)
+        self.lecturer_table = ttk.Treeview(table, columns=("ma", "ten", "sdt", "ns", "kh", "gc"), show="headings"); self.lecturer_table.pack(side="left", fill="both", expand=True)
+        for c, t in zip(["ma", "ten", "sdt", "ns", "kh", "gc"], ["Mã GV", "Họ Tên", "SĐT", "Năm Sinh", "Khoa", "Ghi Chú"]):
+            self.lecturer_table.heading(c, text=t); self.lecturer_table.column(c, width=100)
+        sb = ttk.Scrollbar(table, orient="vertical", command=self.lecturer_table.yview); sb.pack(side="right", fill="y"); self.lecturer_table.configure(yscrollcommand=sb.set)
         self.lecturer_table.bind("<<TreeviewSelect>>", self._select_lecturer_table)
-
 
     # ===================================================================
     # TẢI DỮ LIỆU BAN ĐẦU VÀ LÀM MỚI

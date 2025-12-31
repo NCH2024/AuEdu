@@ -1,5 +1,6 @@
+from tkinter import ttk
 import customtkinter as ctk
-from PIL import Image, ImageSequence, ImageTk
+from PIL import Image, ImageTk, ImageOps, ImageSequence
 import os
 from io import BytesIO
 import tkinter as tk
@@ -7,7 +8,67 @@ from PIL.Image import DecompressionBombError
 import threading
 from core.utils import get_base_path
 import sys
+from core.theme_manager import Theme, AppFont
+import cv2
+import numpy as np
 
+class FullLoadingScreen(ctk.CTkFrame):
+    def __init__(self, master, text="Đang khởi tạo hệ thống...", **kwargs):
+        super().__init__(master, **kwargs)
+        # Phủ kín màn hình cha
+        self.place(relx=0, rely=0, relwidth=1, relheight=1)
+        
+        # Màu nền đồng bộ với App
+        self.configure(fg_color=Theme.Color.BG) 
+        
+        # Container ở giữa để chứa nội dung
+        self.center_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.center_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # 1. Logo hoặc Icon (Nếu em có ảnh logo thì thêm vào đây, tạm thời thầy dùng chữ to)
+        # Logo
+        base_path = get_base_path()
+        try:
+            self.bg_ctkimage = ImageProcessor(os.path.join(base_path, "resources","images","logo.png")) \
+                                    .crop_to_aspect(467, 213) \
+                                    .resize(467, 213) \
+                                    .to_ctkimage(size=(467,213))
+            self.logo = ctk.CTkLabel(self, image=self.bg_ctkimage, text="")
+            self.logo.pack(pady=(30, 20))
+        except Exception as e:
+            print(f"Lỗi load logo: {e}")
+        # self.logo = ctk.CTkLabel(
+        #     self.center_frame, 
+        #     text="AEDU", 
+        #     font=AppFont.H1, 
+        #     text_color=Theme.Color.PRIMARY
+        # )
+        # self.logo.pack(pady=(0, 20))
+        
+        # 2. Thanh Loading chạy liên tục
+        self.progress = ctk.CTkProgressBar(
+            self.center_frame, 
+            width=300, 
+            height=10,
+            mode="indeterminate", # Chế độ chạy qua chạy lại (không cần % cụ thể)
+            progress_color=Theme.Color.PRIMARY,
+            fg_color=Theme.Color.BG_CARD
+        )
+        self.progress.pack(pady=10)
+        self.progress.start() # Bắt đầu chạy
+        
+        # 3. Dòng chữ thông báo
+        self.status_label = ctk.CTkLabel(
+            self.center_frame, 
+            text=text, 
+            font=AppFont.BODY, 
+            text_color=Theme.Color.TEXT_SUB
+        )
+        self.status_label.pack(pady=5)
+
+    def update_status(self, text):
+        """Hàm để cập nhật dòng chữ nếu muốn (VD: Đang tải Camera...)"""
+        self.status_label.configure(text=text)
 
 class ImageProcessor:
     def __init__(self, image_input):
@@ -150,242 +211,192 @@ class ImageProcessor:
         return self
 
 class ImageSlideshow(ctk.CTkFrame):
-    def __init__(self, master, image_folder, size=(500, 300), delay=2000, *args, **kwargs):
-        super().__init__(master, *args, **kwargs)
-        self.size = size
+    def __init__(self, master, image_folder, delay=3000, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
+        
+        self.grid_propagate(False)
+        self.pack_propagate(False)
+
+        self.image_folder = image_folder
         self.delay = delay
-        self._fg_color = "transparent"
+        self.current_idx = 0
+        self.files = []
         
-        # <<< Thêm kiểm tra thư mục tồn tại >>>
-        if not os.path.isdir(image_folder):
-             print(f"Lỗi: Thư mục slideshow '{image_folder}' không tồn tại.")
-             self.images, self.gif_frames, self.files = [], {}, []
-        else:
-             self.images, self.gif_frames, self.files = self.load_images(image_folder)
-             
-        self.index = 0
-        self.job = None # Lưu ID của after job
-        self.gif_index = 0
-
-        # <<< Kiểm tra self.files trước khi tạo label và nút >>>
-        if not self.files:
-            # Hiển thị thông báo nếu không có ảnh
-            self.label = ctk.CTkLabel(self, text="Không tìm thấy ảnh trong thư mục slideshow.", text_color="gray")
-            self.label.pack(expand=True, fill="both")
-            # Không tạo nút nếu không có ảnh
-            self.prev_btn = None
-            self.next_btn = None
-            return # Dừng init sớm
-
-        # Tạo label và nút nếu có ảnh
-        self.label = ctk.CTkLabel(self, text="")
+        self.job_id = None
+        self.video_cap = None 
+        self.is_playing_video = False
+        self.current_size = (0, 0)
+        
+        # Biến lưu tham số crop để không phải tính lại mỗi frame (Tối ưu hiệu năng)
+        self.crop_params = None 
+        
+        self.load_files()
+        
+        self.label = ctk.CTkLabel(self, text="", fg_color="transparent")
         self.label.pack(expand=True, fill="both")
-
-        # Nút Prev
-        self.prev_btn = ctk.CTkButton(
-            self, text="<", width=30, height=30,
-            # bg_color="white", # bg_color không dùng cho CTkButton, dùng fg_color hoặc transparent
-            fg_color="white", text_color="#00234E", # Ví dụ màu text
-            font=("Bahnschrift", 30), corner_radius=15, # Giảm radius
-            command=self.prev_image
-        )
-        self.prev_btn.place(relx=0.05, rely=0.5, anchor="w") # Canh giữa theo chiều dọc
-
-        # Nút Next
-        self.next_btn = ctk.CTkButton(
-            self, text=">", width=30, height=30,
-            fg_color="white", text_color="#00234E",
-            font=("Bahnschrift", 30), corner_radius=15,
-            command=self.next_image
-        )
-        self.next_btn.place(relx=0.95, rely=0.5, anchor="e") # Canh giữa theo chiều dọc
-
-        # Chỉ bắt đầu slideshow nếu có ảnh
-        self.show_image(0)
-        # Bỏ play_slideshow() vì show_image đã gọi after
-    
-
-    def load_images(self, folder):
-        files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
-        if not files: # Trả về rỗng nếu không có file hợp lệ
-            return [], {}, []
-            
-        static_images, gif_images = [], {}
-        valid_files = [] # Chỉ lưu tên file hợp lệ
-
-        for fname in sorted(files):
-            path = os.path.join(folder, fname)
-            try:
-                if fname.lower().endswith(".gif"):
-                    gif = Image.open(path)
-                    frames, durations = [], []
-                    for frame in ImageSequence.Iterator(gif):
-                        # <<< Xử lý lỗi Potential Decompression Bomb >>>
-                        try:
-                            # Chuyển đổi an toàn hơn
-                            frm = frame.copy().convert("RGBA") 
-                            frm = ImageProcessor(frm).resize_and_pad(self.size[0], self.size[1]).get_pil_image() # Dùng resize_and_pad
-                            frames.append(ctk.CTkImage(light_image=frm, size=self.size))
-                            durations.append(frame.info.get("duration", 100))
-                        except DecompressionBombError:
-                             print(f"Cảnh báo: Bỏ qua frame có thể là Decompression Bomb trong {fname}")
-                             continue # Bỏ qua frame này
-                        except Exception as e_frame:
-                             print(f"Lỗi xử lý frame trong GIF {fname}: {e_frame}")
-                             continue # Bỏ qua frame này
-                             
-                    if frames: # Chỉ thêm nếu có frame hợp lệ
-                        gif_images[fname] = {"frames": frames, "durations": durations}
-                        static_images.append(None) # Placeholder cho ảnh tĩnh
-                        valid_files.append(fname)
-                    else:
-                        print(f"Cảnh báo: Không thể tải frame nào từ GIF {fname}")
-                        
-                else: # Ảnh tĩnh
-                    img = Image.open(path)
-                     # <<< Xử lý lỗi Potential Decompression Bomb >>>
-                    try:
-                        # Kiểm tra kích thước trước khi resize
-                        if img.width * img.height > 89478485: # Giới hạn pixel (ví dụ)
-                             raise DecompressionBombError("Ảnh quá lớn")
-                        # Dùng ImageProcessor để resize_and_pad
-                        processed_img = ImageProcessor(img).resize_and_pad(self.size[0], self.size[1]).get_pil_image()
-                        static_images.append(ctk.CTkImage(light_image=processed_img, size=self.size))
-                        gif_images[fname] = None # Placeholder cho gif
-                        valid_files.append(fname)
-                    except DecompressionBombError as e_bomb:
-                         print(f"Cảnh báo: Bỏ qua ảnh tĩnh có thể là Decompression Bomb {fname}: {e_bomb}")
-                         continue # Bỏ qua file này
-                    except Exception as e_img:
-                         print(f"Lỗi xử lý ảnh tĩnh {fname}: {e_img}")
-                         continue # Bỏ qua file này
-            except Exception as e_open:
-                print(f"Lỗi khi mở file {fname}: {e_open}")
-                continue # Bỏ qua file lỗi
-
-        return static_images, gif_images, valid_files # Trả về danh sách file hợp lệ
-
-    def cancel_job(self):
-        """Hủy bỏ tác vụ 'after' đang chờ."""
-        if self.job:
-            try:
-                self.after_cancel(self.job)
-            except tk.TclError: # Bắt lỗi nếu job đã bị hủy hoặc không hợp lệ
-                pass
-            self.job = None
-
-    def show_image(self, idx):
-        # <<< Kiểm tra widget tồn tại >>>
-        if not self.winfo_exists() or not self.files:
-            self.cancel_job()
-            return
-
-        self.cancel_job() # Hủy job cũ trước khi tạo job mới
         
-        # <<< Đảm bảo index hợp lệ >>>
+        self.create_nav_buttons()
+        self.bind("<Configure>", self.on_resize)
+        
+        if self.files:
+            self.show_slide(0)
+
+    def load_files(self):
+        valid_img = {".png", ".jpg", ".jpeg", ".gif"}
+        valid_video = {".mp4", ".avi", ".mov", ".mkv"}
+        if os.path.exists(self.image_folder):
+            for f in sorted(os.listdir(self.image_folder)):
+                ext = os.path.splitext(f)[1].lower()
+                if ext in valid_img or ext in valid_video:
+                    self.files.append(f)
+
+    def create_nav_buttons(self):
+        if not self.files: return
+        style = {
+            "width": 30, "height": 30, "corner_radius": 0,
+            "bg_color": Theme.Color.BG_CARD,
+            "fg_color": Theme.Color.BG_CARD, "text_color": Theme.Color.TEXT,
+            "hover_color": Theme.Color.PRIMARY, "font": AppFont.H2
+        }
+        self.btn_prev = ctk.CTkButton(self, text="<", command=self.prev_slide, **style)
+        self.btn_prev.place(relx=0.02, rely=0.5, anchor="w")
+        self.btn_next = ctk.CTkButton(self, text=">", command=self.next_slide, **style)
+        self.btn_next.place(relx=0.98, rely=0.5, anchor="e")
+
+    def on_resize(self, event):
+        if event.width < 10 or event.height < 10: return
+        self.current_size = (event.width, event.height)
+        
+        # Tính toán lại tham số crop ngay khi resize
+        self.recalc_crop_params()
+        
+        if not self.is_playing_video:
+            self.show_current_static_image()
+
+    def recalc_crop_params(self):
+        """Tính toán trước tham số resize/crop để dùng cho OpenCV"""
+        if self.current_size == (0, 0): return
+
+        target_w, target_h = self.current_size
+        img_w, img_h = 0, 0
+
+        # Lấy kích thước nguồn
+        if self.is_playing_video and self.video_cap:
+            img_w = int(self.video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            img_h = int(self.video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        elif self.files:
+            pass
+
+        if img_w == 0 or img_h == 0: return
+
+        # Thuật toán Cover (Lấp đầy)
+        ratio = max(target_w / img_w, target_h / img_h)
+        new_w = int(img_w * ratio)
+        new_h = int(img_h * ratio)
+        
+        # Tọa độ cắt giữa
+        left = (new_w - target_w) // 2
+        top = (new_h - target_h) // 2
+        
+        # Lưu lại: (width mới, height mới, x_cat, y_cat, width_cat, height_cat)
+        self.crop_params = (new_w, new_h, left, top, target_w, target_h)
+
+    def show_slide(self, idx):
+        self.cleanup_current_slide()
+        
         idx = idx % len(self.files)
-        self.index = idx 
+        self.current_idx = idx
+        f = self.files[idx]
+        path = os.path.join(self.image_folder, f)
+        ext = os.path.splitext(f)[1].lower()
         
-        fname = self.files[idx]
-        
-        try:
-            if fname.lower().endswith(".gif") and fname in self.gif_frames and self.gif_frames[fname]:
-                self.gif_index = 0
-                self.play_gif(fname)
-            elif idx < len(self.images) and self.images[idx]: # Kiểm tra index và image tồn tại
-                self.label.configure(image=self.images[idx])
-                # Lên lịch cho ảnh tiếp theo
-                self.job = self.after(self.delay, self.next_image)
-            else:
-                 # Trường hợp ảnh không load được (None trong list) -> chuyển tiếp
-                 print(f"Ảnh tại index {idx} ({fname}) không hợp lệ, chuyển tiếp.")
-                 self.job = self.after(100, self.next_image) # Chuyển nhanh hơn
-        except tk.TclError as e:
-             print(f"Lỗi TclError khi hiển thị ảnh {fname}: {e}")
-             self.cancel_job() # Hủy job nếu có lỗi
-        except Exception as e:
-             print(f"Lỗi không xác định khi hiển thị ảnh {fname}: {e}")
-             self.cancel_job()
+        if ext in {".mp4", ".avi", ".mov", ".mkv"}:
+            self.is_playing_video = True
+            self.video_cap = cv2.VideoCapture(path)
+            self.recalc_crop_params() # Tính toán crop cho video mới
+            self.play_video_frame()
+        else:
+            self.is_playing_video = False
+            self.show_current_static_image()
+            self.job_id = self.after(self.delay, self.next_slide)
 
-
-    def play_gif(self, fname):
-        # <<< Kiểm tra widget tồn tại >>>
-        if not self.winfo_exists() or fname not in self.gif_frames or not self.gif_frames[fname]:
-            self.cancel_job()
+    def play_video_frame(self):
+        if not self.video_cap or not self.video_cap.isOpened():
+            self.next_slide()
             return
 
-        gif_data = self.gif_frames[fname]
-        frames = gif_data.get("frames", [])
-        durations = gif_data.get("durations", [])
-
-        # Kiểm tra frame và duration hợp lệ
-        if not frames or not durations or len(frames) != len(durations):
-             print(f"Dữ liệu GIF không hợp lệ cho {fname}, chuyển tiếp.")
-             self.job = self.after(100, self.next_image) # Chuyển nhanh
-             return
-
-        # Nếu hết frame -> chuyển sang ảnh/gif tiếp theo
-        if self.gif_index >= len(frames):
-            self.gif_index = 0
-            self.job = self.after(self.delay, self.next_image)
+        ret, frame = self.video_cap.read()
+        if not ret:
+            self.next_slide()
             return
+            
+        # --- TỐI ƯU HÓA BẰNG OPENCV (NHANH HƠN 10 LẦN PIL) ---
+        if self.crop_params:
+            new_w, new_h, left, top, target_w, target_h = self.crop_params
+            
+            # 1. Resize bằng OpenCV (Cực nhanh)
+            # Chỉ resize nếu kích thước khác biệt đáng kể
+            if frame.shape[1] != new_w or frame.shape[0] != new_h:
+                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            
+            # 2. Crop bằng Numpy Slicing (Tức thì)
+            # Cắt lấy vùng giữa: frame[y:y+h, x:x+w]
+            frame = frame[top:top+target_h, left:left+target_w]
+        
+        # 3. Convert BGR -> RGB để hiển thị đúng màu
+        # OpenCV dùng BGR, Tkinter dùng RGB
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # 4. Tạo Image và hiển thị
+        pil_img = Image.fromarray(frame)
+        ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=pil_img.size)
+        
+        self.label.configure(image=ctk_img)
+        self.label.image = ctk_img # Giữ tham chiếu
+        
+        # Lặp lại sau 33ms (~30 FPS)
+        self.job_id = self.after(33, self.play_video_frame)
 
-        # <<< Kiểm tra index hợp lệ >>>
-        if self.gif_index < 0: self.gif_index = 0
+    def show_current_static_image(self):
+        if self.current_size == (0, 0): return
+        f = self.files[self.current_idx]
+        path = os.path.join(self.image_folder, f)
         
         try:
-            current_frame = frames[self.gif_index]
-            current_delay = durations[self.gif_index]
-            
-            # Đảm bảo delay hợp lệ
-            if not isinstance(current_delay, int) or current_delay <= 0:
-                current_delay = 100 # Mặc định 100ms
-                
-            self.label.configure(image=current_frame)
+            # Với ảnh tĩnh, dùng ImageOps.fit của PIL vẫn đủ nhanh và tiện
+            pil_img = Image.open(path)
+            w, h = self.current_size
+            fitted_img = ImageOps.fit(pil_img, (w, h), method=Image.Resampling.LANCZOS)
+            ctk_img = ctk.CTkImage(light_image=fitted_img, dark_image=fitted_img, size=(w, h))
+            self.label.configure(image=ctk_img)
+            self.label.image = ctk_img
+        except Exception: pass
 
-            self.gif_index += 1
-            # Lên lịch cho frame tiếp theo
-            self.job = self.after(current_delay, lambda: self.play_gif(fname))
-            
-        except tk.TclError as e:
-             print(f"Lỗi TclError khi play GIF frame {self.gif_index} của {fname}: {e}")
-             self.cancel_job() # Hủy job nếu có lỗi
-        except IndexError:
-             print(f"Lỗi IndexError khi truy cập frame/duration {self.gif_index} của {fname}")
-             self.cancel_job()
-             self.job = self.after(100, self.next_image) # Chuyển nhanh
-        except Exception as e:
-             print(f"Lỗi không xác định khi play GIF {fname}: {e}")
-             self.cancel_job()
+    def cleanup_current_slide(self):
+        if self.job_id:
+            self.after_cancel(self.job_id)
+            self.job_id = None
+        if self.video_cap:
+            self.video_cap.release()
+            self.video_cap = None
+        self.is_playing_video = False
 
-    def next_image(self):
-        if not self.files: return # Không làm gì nếu không có ảnh
-        next_idx = (self.index + 1) % len(self.files)
-        self.show_image(next_idx)
+    def next_slide(self):
+        self.show_slide(self.current_idx + 1)
 
-    def prev_image(self):
-        if not self.files: return # Không làm gì nếu không có ảnh
-        prev_idx = (self.index - 1) % len(self.files)
-        self.show_image(prev_idx)
+    def prev_slide(self):
+        self.show_slide(self.current_idx - 1)
 
-    # <<< Thêm phương thức destroy >>>
     def destroy(self):
-        """Hủy bỏ job trước khi hủy widget."""
-        print("Hủy ImageSlideshow...")
-        self.cancel_job()
-        # Hủy các widget con một cách an toàn
-        for child in self.winfo_children():
-            try:
-                child.destroy()
-            except tk.TclError:
-                pass # Bỏ qua nếu widget đã bị hủy
-        super().destroy() # Gọi hàm destroy của lớp cha
+        self.cleanup_current_slide()
+        super().destroy()
+             
 class WigdetFrame(ctk.CTkFrame):
     def __init__(
         self,
         master,
-        width=None,
-        height=None,
+        width=100, 
+        height=100, 
         radius=20,
         widget_color="#2DFCB0",
         row=0,
@@ -403,29 +414,45 @@ class WigdetFrame(ctk.CTkFrame):
         self.grid(row=row, column=column, rowspan=rowspan, columnspan=columnspan, sticky=sticky, padx=padx, pady=pady)
         self.grid_propagate(grid_propagate) 
 
+
 class ButtonTheme(ctk.CTkButton):
     def __init__(
         self,
         master,
         text,
-        font=("Bahnschrift", 16, "normal"),
-        fg_color="green",
-        hover_color="darkblue",
-        border_color="white",
-        border_width=2,
+        font=None,             
+        fg_color=None,         
+        hover_color=None,
+        text_color=None,       
+        border_color=None,
+        border_width=0,
         height=40,
-        width=200,
+        width=150,             
         image=None,  
         command=None,
         corner_radius=10,
         **kwargs
     ):
+        if font is None: font = AppFont.BODY_BOLD
+        if fg_color is None: fg_color = Theme.Color.PRIMARY
+        if border_color is None: border_color = Theme.Color.BORDER
+
+        # Lấy màu Hover chuẩn từ Theme thay vì dùng Secondary
+        if hover_color is None:
+            hover_color = Theme.Color.PRIMARY_HOVER 
+        # --------------------
+
+        # Logic màu chữ tương phản (giữ nguyên cái nãy thầy chỉ)
+        if text_color is None:
+            text_color = Theme.Color.BG 
+
         super().__init__(
             master=master,
             text=text,
             font=font,
             fg_color=fg_color,
             hover_color=hover_color,
+            text_color=text_color,
             border_color=border_color,
             border_width=border_width,
             height=height,
@@ -436,22 +463,48 @@ class ButtonTheme(ctk.CTkButton):
             **kwargs
         )
 
+# Trong gui/base/utils.py
+
 class ComboboxTheme(ctk.CTkComboBox):
     def __init__(
         self,
         master,
         values=[],
         command=None,
-        font=("Bahnschrift", 16, "normal"),
-        fg_color="white",
-        border_color="#022965",
+        font=None,
+        fg_color=None,
+        border_color=None,
         border_width=1,
-        button_color="#007F3A",
-        button_hover_color="#005C2D",
-        dropdown_font=("Bahnschrift", 14),
-        text_color="black",
+        button_color=None,
+        button_hover_color=None,
+        dropdown_fg_color=None, 
+        dropdown_text_color=None,
+        dropdown_hover_color=None,
+        text_color=None,
         **kwargs
     ):
+        if font is None: font = AppFont.BODY
+        
+        # 1. Nền ô nhập (Input): BG_CARD
+        if fg_color is None: fg_color = Theme.Color.BG_CARD         
+        
+        # 2. Viền ngoài: BORDER (Trắng/Xám)
+        if border_color is None: border_color = Theme.Color.BORDER  
+
+        # 3. Nút Mũi Tên
+        if button_color is None: 
+            button_color = Theme.Color.SECONDARY
+            
+        if button_hover_color is None: 
+            button_hover_color = Theme.Color.PRIMARY_HOVER 
+        
+        if text_color is None: text_color = Theme.Color.TEXT
+        
+        # Dropdown
+        if dropdown_fg_color is None: dropdown_fg_color = Theme.Color.BG_CARD
+        if dropdown_text_color is None: dropdown_text_color = Theme.Color.TEXT
+        if dropdown_hover_color is None: dropdown_hover_color = Theme.Color.SECONDARY 
+        
         super().__init__(
             master=master,
             values=values,
@@ -461,12 +514,13 @@ class ComboboxTheme(ctk.CTkComboBox):
             border_width=border_width,
             button_color=button_color,
             button_hover_color=button_hover_color,
-            dropdown_font=dropdown_font,
+            dropdown_fg_color=dropdown_fg_color,
+            dropdown_text_color=dropdown_text_color,
+            dropdown_hover_color=dropdown_hover_color,
             text_color=text_color,
             command=command,
             **kwargs
         )
-
 
 class Tooltip:
     def __init__(self, widget, text, delay=200):
@@ -502,287 +556,142 @@ class Tooltip:
             self.tooltip_window.destroy()
 
 class LabelCustom(ctk.CTkFrame):
-    def __init__(
-        self,
-        master,
-        text,
-        value=None,
-        text_color="#00224E",
-        value_color="#0412A9",
-        font_family="Bahnschrift",
-        font_size=16,
-        font_weight="bold",
-        value_weight="normal",
-        wraplength=300,
-        row_pad_y=2,
-        pack_pady=1,
-        pack_padx=25,
-        pack_anchor="w",
-        fg_color="#2DFCB0", 
-        **kwargs
-    ):
-        super().__init__(master, fg_color="transparent", **kwargs)
+    def __init__(self, master, text, value=None, 
+                 text_color=None, value_color=None, # Cho phép None để lấy mặc định
+                 font_family=AppFont.NAME, # Dùng font từ config
+                 font_size=16, font_weight="bold", value_weight="normal",
+                 wraplength=300, row_pad_y=2, pack_pady=1, pack_padx=25, pack_anchor="w", 
+                 fg_color="transparent", **kwargs):
+        
+        super().__init__(master, fg_color=fg_color, **kwargs)
 
+        # Logic chọn màu thông minh
+        if text_color is None: text_color = Theme.Color.TEXT
+        if value_color is None: value_color = Theme.Color.PRIMARY # Giá trị nổi bật bằng màu chủ đạo
+
+        # Tạo font object
         label_font = (font_family, font_size, font_weight)
         value_font = (font_family, font_size, value_weight)
 
         # Label bên trái
-        self.label = ctk.CTkLabel(
-            self,
-            text=text,
-            font=label_font,
-            text_color=text_color,
-            wraplength=wraplength,
-            fg_color="transparent",
-            anchor="w"
-        )
+        self.label = ctk.CTkLabel(self, text=text, font=label_font, text_color=text_color,
+                                  wraplength=wraplength, fg_color="transparent", anchor="w")
         self.label.grid(row=0, column=0, sticky="nw", padx=(0, 10), pady=row_pad_y)
 
-        # Nếu có giá trị thì tạo label bên phải
+        # Label giá trị bên phải
         if value:
-            self.value = ctk.CTkLabel(
-                self,
-                text=value,
-                font=value_font,
-                text_color=value_color,
-                wraplength=wraplength,
-                fg_color="transparent",
-                justify="left",
-                anchor="w"
-            )
+            self.value = ctk.CTkLabel(self, text=value, font=value_font, text_color=value_color,
+                                      wraplength=wraplength, fg_color="transparent", justify="left", anchor="w")
             self.value.grid(row=0, column=1, sticky="nw", pady=row_pad_y)
 
-        # Gói gọn nguyên frame ra ngoài
         self.pack(pady=pack_pady, padx=pack_padx, anchor=pack_anchor)
-        
+
     def set_text(self, text):
         self.label.configure(text=text)
 
-
 class CustomTable(ctk.CTkFrame):
     """
-    NÂNG CẤP MỚI:
-    - Hỗ trợ scroll theo cả chiều dọc và chiều ngang
-    - Header cố định khi scroll dọc (sticky header)
-    - Tương thích ngược 100% với code cũ
+    Bảng dữ liệu tuỳ chỉnh dùng widget của CustomTkinter để có thể:
+    - Bo viền từng ô (Border).
+    - Đổi màu chuẩn theo Theme (Sáng/Tối).
     """
-    def __init__(self, master, columns, data, 
-                 header_color="#013A63", row_color="#E8F8F5",
-                 header_text_color="white", row_text_color="black",
-                 column_widths=None,
-                 scroll=True,
-                 table_width=None, table_height=None,
-                 highlight_columns=None, highlight_color="#FFF2B2",
-                 **kwargs):
-
+    def __init__(self, master, columns, column_widths=None, data=None, command=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
-
+        
         self.columns = columns
-        self.data = data
-        self.header_color = header_color
-        self.row_color = row_color
-        self.header_text_color = header_text_color
-        self.row_text_color = row_text_color
-        self.column_widths = column_widths
-        self.scroll = scroll
-        self.table_width = table_width
-        self.table_height = table_height
-        self.highlight_columns = highlight_columns or []
-        self.highlight_color = highlight_color
+        self.column_widths = column_widths if column_widths else [100] * len(columns)
+        self.command = command # Hàm callback khi click vào dòng (nếu cần)
+        self.rows = [] # Chứa các widget dòng
         
-        # NÂNG CẤP: Thêm container riêng cho header và data
-        self.header_container = None
-        self.data_container = None
-        self.canvas = None
-        self.scrollbar_y = None
-        self.scrollbar_x = None
+        # --- CẤU HÌNH MÀU SẮC TỪ THEME ---
+        self.header_color = Theme.Color.PRIMARY
+        self.header_text_color = Theme.Color.BG 
+        self.cell_bg_color = Theme.Color.BG_CARD
+        self.cell_text_color = Theme.Color.TEXT
+        self.border_color = Theme.Color.BORDER
         
-        self._data_widgets = []  # Lưu trữ các widget của hàng dữ liệu
-
-        self.after(1, self._init_render)
-
-    def _init_render(self):
-        """Khởi tạo và render bảng"""
-        self.update_idletasks()
+        # --- 1. HEADER (Tiêu đề cột) ---
+        self.header_frame = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        self.header_frame.pack(fill="x", anchor="n")
         
-        if self.scroll:
-            self._setup_scrollable_table()
-        else:
-            # Giữ nguyên cách cũ cho scroll=False
-            self.header_container = self
-            self.data_container = self
-            self._create_header()
-            self._create_data_rows()
-
-    def _setup_scrollable_table(self):
-        """
-        NÂNG CẤP: Thiết lập bảng với scroll 2 chiều và header cố định
-        """
-        # Cấu hình grid cho frame chính
-        self.grid_rowconfigure(0, weight=0)  # Header (không co giãn)
-        self.grid_rowconfigure(1, weight=1)  # Data area (co giãn)
-        self.grid_columnconfigure(0, weight=1)
-        
-        # ============ HEADER CỐ ĐỊNH ============
-        self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.header_frame.grid(row=0, column=0, sticky="ew", padx=(0, 15))  # padx để tránh scrollbar dọc
-        self.header_container = self.header_frame
-        
-        # ============ DATA AREA VỚI SCROLL 2 CHIỀU ============
-        # Frame chứa canvas và scrollbars
-        self.data_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.data_frame.grid(row=1, column=0, sticky="nsew")
-        self.data_frame.grid_rowconfigure(0, weight=1)
-        self.data_frame.grid_columnconfigure(0, weight=1)
-        
-        # Canvas để chứa nội dung data
-        self.canvas = ctk.CTkCanvas(self.data_frame, bg="white", highlightthickness=0)
-        self.canvas.grid(row=0, column=0, sticky="nsew")
-        
-        # Scrollbar dọc
-        self.scrollbar_y = ctk.CTkScrollbar(self.data_frame, orientation="vertical", command=self.canvas.yview)
-        self.scrollbar_y.grid(row=0, column=1, sticky="ns")
-        
-        # Scrollbar ngang
-        self.scrollbar_x = ctk.CTkScrollbar(self.data_frame, orientation="horizontal", command=self.canvas.xview)
-        self.scrollbar_x.grid(row=1, column=0, sticky="ew")
-        
-        # Cấu hình canvas
-        self.canvas.configure(yscrollcommand=self.scrollbar_y.set, xscrollcommand=self.scrollbar_x.set)
-        
-        # Frame bên trong canvas để chứa data rows
-        self.data_inner_frame = ctk.CTkFrame(self.canvas, fg_color="transparent")
-        self.canvas_window = self.canvas.create_window((0, 0), window=self.data_inner_frame, anchor="nw")
-        
-        self.data_container = self.data_inner_frame
-        
-        # Bind sự kiện để cập nhật scrollregion và đồng bộ header
-        self.data_inner_frame.bind("<Configure>", self._on_data_frame_configure)
-        self.canvas.bind("<Configure>", self._on_canvas_configure)
-        
-        # Bind scroll chuột (chỉ scroll dọc)
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-        
-        # Tạo header và data
-        self._create_header()
-        self._create_data_rows()
-        
-        # Đồng bộ độ rộng header với data lần đầu
-        self.after(100, self._sync_header_scroll)
-
-    def _on_data_frame_configure(self, event):
-        """Cập nhật scrollregion khi data frame thay đổi kích thước"""
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def _on_canvas_configure(self, event):
-        """Điều chỉnh độ rộng của data_inner_frame theo canvas"""
-        canvas_width = event.width
-        self.canvas.itemconfig(self.canvas_window, width=canvas_width)
-
-    def _on_mousewheel(self, event):
-        """Xử lý scroll chuột"""
-        if self.canvas and self.canvas.winfo_exists():
-            # Windows/MacOS
-            if event.num == 4 or event.delta > 0:
-                self.canvas.yview_scroll(-1, "units")
-            elif event.num == 5 or event.delta < 0:
-                self.canvas.yview_scroll(1, "units")
-
-    def _sync_header_scroll(self):
-        """
-        NÂNG CẤP: Đồng bộ scroll ngang giữa header và data
-        """
-        if not self.scroll or not self.canvas:
-            return
+        for i, col_name in enumerate(self.columns):
+            # Dùng CTkButton với hover=False để giả làm Label có viền và nền đẹp
+            width = self.column_widths[i] if i < len(self.column_widths) else 100
             
-        def on_canvas_xscroll(*args):
-            # Khi canvas scroll ngang, di chuyển header theo
-            if len(args) >= 2:
-                try:
-                    fraction = float(args[0])
-                    # Tính toán vị trí x cần di chuyển header
-                    total_width = self.data_inner_frame.winfo_width()
-                    visible_width = self.canvas.winfo_width()
-                    if total_width > visible_width:
-                        offset = -fraction * (total_width - visible_width)
-                        self.header_frame.place(x=offset, y=0)
-                except:
-                    pass
-        
-        # Ghi đè callback của scrollbar ngang
-        self.canvas.configure(xscrollcommand=lambda *args: (
-            self.scrollbar_x.set(*args),
-            on_canvas_xscroll(*args)
-        ))
-
-    def _create_header(self):
-        """Tạo header (giữ nguyên logic cũ)"""
-        if not self.column_widths:
-            self.update_idletasks()
-            num_cols = len(self.columns)
-            current_container_width = self.header_container.winfo_width()
-            col_width = int(current_container_width / num_cols) if current_container_width > 1 else 100
-            self.column_widths = [col_width] * num_cols
-
-        for i, width in enumerate(self.column_widths):
-            self.header_container.grid_columnconfigure(i, minsize=width)
-            if self.scroll and self.data_container != self.header_container:
-                # Đồng bộ column width cho data container
-                self.data_container.grid_columnconfigure(i, minsize=width)
-
-        for col_index, col_name in enumerate(self.columns):
-            label = ctk.CTkLabel(
-                self.header_container, text=col_name,
-                font=("Bahnschrift", 14, "bold"),
+            lbl = ctk.CTkButton(
+                self.header_frame, 
+                text=col_name,
+                font=AppFont.BODY_BOLD,
                 text_color=self.header_text_color,
                 fg_color=self.header_color,
-                height=30,
-                anchor="center"
+                hover=False,              # Không hiệu ứng hover
+                corner_radius=0,          # Vuông vức
+                width=width,
+                height=35,
+                border_width=1,           # Có viền
+                border_color=self.border_color
             )
-            label.grid(row=0, column=col_index, padx=1, pady=1, sticky="nsew")
+            # Nếu là cột cuối thì cho dãn ra
+            if i == len(self.columns) - 1:
+                lbl.pack(side="left", fill="x", expand=True, padx=(0,0))
+            else:
+                lbl.pack(side="left", padx=(0,0)) # padx=0 để các ô dính liền nhau tạo border chung
 
-    def _clear_data_rows(self):
-        """Xóa các widget của hàng dữ liệu"""
-        for row_widgets in self._data_widgets:
-            for widget in row_widgets:
-                widget.destroy()
-        self._data_widgets = []
-
-    def _create_data_rows(self):
-        """Tạo các hàng dữ liệu (giữ nguyên logic cũ)"""
-        for row_index, row_data in enumerate(self.data, start=1):
-            row_widgets = []
-            for col_index, cell in enumerate(row_data):
-                bg_color = self.highlight_color if col_index in self.highlight_columns else self.row_color
-                display_text = str(cell) if cell is not None else "-"
-                
-                label = ctk.CTkLabel(
-                    self.data_container, text=display_text,
-                    font=("Bahnschrift", 13),
-                    text_color=self.row_text_color,
-                    fg_color=bg_color,
-                    height=28,
-                    anchor="w"
-                )
-                label.grid(row=row_index - 1, column=col_index, padx=1, pady=1, sticky="nsew")
-                row_widgets.append(label)
-            self._data_widgets.append(row_widgets)
-
-    def update_data(self, new_data):
-        """Cập nhật dữ liệu bảng (giữ nguyên logic cũ)"""
-        self.data = new_data
+        # --- 2. BODY (Nội dung bảng - Cuộn được) ---
+        self.scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent", corner_radius=0)
+        self.scroll_frame.pack(fill="both", expand=True)
         
-        # Chỉ xóa các hàng dữ liệu cũ, giữ lại header
-        self._clear_data_rows()
+        # Load dữ liệu ban đầu
+        if data:
+            self.update_data(data)
+
+    def update_data(self, data):
+        """
+        Cập nhật dữ liệu mới cho bảng.
+        data: List các tuple/list giá trị. Ví dụ: [("SV01", "A"), ("SV02", "B")]
+        """
+        # 1. Xóa dữ liệu cũ
+        for widget in self.scroll_frame.winfo_children():
+            widget.destroy()
+        self.rows.clear()
         
-        # Tạo các hàng dữ liệu mới
-        if self.data_container and self.data_container.winfo_exists():
-            self._create_data_rows()
+        if not data:
+            return
+
+        # 2. Vẽ dữ liệu mới
+        for row_idx, row_data in enumerate(data):
+            row_frame = ctk.CTkFrame(self.scroll_frame, fg_color="transparent", corner_radius=0)
+            row_frame.pack(fill="x", anchor="n")
+            self.rows.append(row_frame)
             
-        # Cập nhật scrollregion nếu có canvas
-        if self.canvas and self.canvas.winfo_exists():
-            self.data_inner_frame.update_idletasks()
-            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            for col_idx, cell_value in enumerate(row_data):
+                if col_idx >= len(self.columns): break # Tránh lỗi index
+                
+                width = self.column_widths[col_idx] if col_idx < len(self.column_widths) else 100
+                
+                # Dùng CTkButton giả làm ô dữ liệu (Cell)
+                # Lý do: CTkLabel không hỗ trợ border_width tốt bằng CTkButton
+                cell = ctk.CTkButton(
+                    row_frame,
+                    text=str(cell_value),
+                    font=AppFont.BODY,
+                    text_color=self.cell_text_color,
+                    fg_color=self.cell_bg_color, # Màu nền ô
+                    hover=False,                 # Tắt hover để giống label tĩnh
+                    corner_radius=0,
+                    width=width,
+                    height=30,
+                    border_width=1,              # VIỀN TỪNG Ô
+                    border_color=self.border_color,
+                    anchor="w"                   # Căn trái chữ
+                )
+                # Thêm padding text chút cho đẹp
+                cell._text_label.grid_configure(padx=5)
+                
+                if col_idx == len(self.columns) - 1:
+                    cell.pack(side="left", fill="x", expand=True)
+                else:
+                    cell.pack(side="left")
                 
 class NotifyCard(ctk.CTkFrame):
     def __init__(self, master, title, content,
@@ -792,7 +701,8 @@ class NotifyCard(ctk.CTkFrame):
                  height=150, 
                  width=250, 
                 text_btn="Xem chi tiết", **kwargs):
-        super().__init__(master, fg_color="white", corner_radius=15, **kwargs)
+        # SỬA: Dùng BG_CARD thay vì "white"
+        super().__init__(master, fg_color=Theme.Color.BG_CARD, corner_radius=15, **kwargs)
 
         if image_pil:
             img = ImageProcessor(image_pil).crop_to_aspect(4, 3).to_ctkimage(size=(width, height))
@@ -803,13 +713,21 @@ class NotifyCard(ctk.CTkFrame):
         self.image_label.image = img
         self.image_label.grid(row=0, column=0, rowspan=3, padx=0, pady=0)
 
-        self.title_label = ctk.CTkLabel(self, text=title, font=("Bahnschrift", 16, "bold"), text_color="#FF2020", wraplength=370)
+        # SỬA: Dùng text_color từ Theme (RED_ALERT hoặc DANGER)
+        self.title_label = ctk.CTkLabel(self, text=title, font=("Bahnschrift", 16, "bold"), 
+                                        text_color=Theme.Color.RED_ALERT, wraplength=370)
         self.title_label.grid(row=0, column=1, sticky="w", padx=20, pady=(10, 0))
 
-        self.date_label = ctk.CTkLabel(self, text=ngay_dang.strftime("%d/%m/%Y %H:%M"), font=("Bahnschrift", 12), text_color="#3E3E3E")
+        # SỬA: Dùng TEXT_SUB cho ngày tháng
+        self.date_label = ctk.CTkLabel(self, text=ngay_dang.strftime("%d/%m/%Y %H:%M"), 
+                                       font=("Bahnschrift", 12), text_color=Theme.Color.TEXT_SUB)
         self.date_label.grid(row=1, column=1, sticky="w", padx=20, pady=2)
-
-        self.detail_btn = ctk.CTkButton(self, text=text_btn, command=on_click)
+        
+        # SỬA: ButtonTheme mặc định đã có màu chuẩn, nhưng nếu dùng CTkButton thường thì nên set màu
+        self.detail_btn = ctk.CTkButton(self, text=text_btn, command=on_click,
+                                        fg_color=Theme.Color.PRIMARY, 
+                                        hover_color=Theme.Color.PRIMARY_HOVER,
+                                        text_color=Theme.Color.BG)
         self.detail_btn.grid(row=2, column=1, sticky="w", padx=20, pady=(5, 5))
         
     def set_up_button(self, fg_color, hover_color, text_color, border_color, border_width):
@@ -848,9 +766,9 @@ class SliderWithLabel(ctk.CTkFrame):
 
         self.is_integer_slider = isinstance(from_, int) and isinstance(to, int)
         
-        # Lưu lại màu sắc ban đầu để có thể khôi phục
-        self.label_color = "#060056"
-        self.value_color = "green"
+        # SỬA: Lưu màu từ Theme thay vì mã Hex cứng
+        self.label_color = Theme.Color.TEXT
+        self.value_color = Theme.Color.SUCCESS  # Màu cho các con số (VD: Xanh lá/Mint)
 
         self.label = ctk.CTkLabel(self, text=label_text, text_color=self.label_color, font=("Bahnschrift", 14))
         self.label.grid(row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(5, 0))
@@ -863,10 +781,13 @@ class SliderWithLabel(ctk.CTkFrame):
         else:
             steps = 100
 
+        # SỬA: Progress color và Button color theo Theme
         self.slider = ctk.CTkSlider(
             self, from_=from_, to=to, number_of_steps=steps,
-            command=self.update_label, height=15, progress_color="#007BC7",
-            button_color="#00358B", button_hover_color="#002448"
+            command=self.update_label, height=15, 
+            progress_color=Theme.Color.PRIMARY,       # Màu thanh đã trượt
+            button_color=Theme.Color.PRIMARY,         # Màu nút tròn
+            button_hover_color=Theme.Color.PRIMARY_HOVER
         )
         self.slider.grid(row=1, column=1, sticky="ew", padx=5)
 
@@ -881,27 +802,23 @@ class SliderWithLabel(ctk.CTkFrame):
         
         self.set_value(initial)
 
-    # --- HÀM MỚI ĐƯỢC THÊM VÀO ĐỂ SỬA LỖI ---
     def configure(self, **kwargs):
-        """Ghi đè hàm configure để xử lý thuộc tính 'state' một cách đặc biệt."""
         if "state" in kwargs:
-            new_state = kwargs.pop("state") # Lấy giá trị state và xóa nó khỏi kwargs
-            self.slider.configure(state=new_state) # Áp dụng state cho slider bên trong
+            new_state = kwargs.pop("state")
+            self.slider.configure(state=new_state)
 
-            # Cải tiến UI: Làm mờ cả các label cho trực quan
             if new_state == "disabled":
-                disabled_color = "#9B9B9B" # Màu xám mờ
+                disabled_color = Theme.Color.TEXT_SUB # Dùng màu phụ (xám)
                 self.label.configure(text_color=disabled_color)
                 self.min_label.configure(text_color=disabled_color)
                 self.max_label.configure(text_color=disabled_color)
                 self.value_label.configure(text_color=disabled_color)
-            else: # new_state == "normal"
+            else:
                 self.label.configure(text_color=self.label_color)
                 self.min_label.configure(text_color=self.value_color)
                 self.max_label.configure(text_color=self.value_color)
                 self.value_label.configure(text_color=self.value_color)
 
-        # Gọi hàm configure của lớp cha (CTkFrame) với các tham số còn lại (nếu có)
         super().configure(**kwargs)
 
     def update_label(self, value):
@@ -926,12 +843,21 @@ class SliderWithLabel(ctk.CTkFrame):
         self.slider.set(value)
         self.update_label(value)
 class SwitchOption(ctk.CTkFrame):
-    def __init__(self, master, text, initial=True, command=None, wraplenght=500, text_color="#310148", font=("Bahnschrift", 13), **kwargs):
+    def __init__(self, master, text, initial=True, command=None, wraplenght=500, 
+                 text_color=None, # Cho phép truyền vào, nếu không thì lấy Theme
+                 font=("Bahnschrift", 13), **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
+        
+        # SỬA: Lấy mặc định từ Theme
+        if text_color is None: text_color = Theme.Color.TEXT
+        
         self.label = ctk.CTkLabel(self, text=text, text_color=text_color, font=font, wraplength=wraplenght, anchor="w", justify="left")
         self.label.pack(side="left", padx=(10, 5), pady=5)
 
-        self.switch = ctk.CTkSwitch(self, text="BẬT" if initial else "TẮT", progress_color="#00D084", font=font, text_color=text_color)
+        # SỬA: progress_color lấy từ SUCCESS (Màu xanh thành công)
+        self.switch = ctk.CTkSwitch(self, text="BẬT" if initial else "TẮT", 
+                                    progress_color=Theme.Color.SUCCESS, 
+                                    font=font, text_color=text_color)
         self.switch.select() if initial else self.switch.deselect()
         self.switch.pack(side="right", padx=10)
 
@@ -951,41 +877,44 @@ class SwitchOption(ctk.CTkFrame):
         else:
             self.switch.deselect()
         self.switch.configure(text="BẬT" if value else "TẮT")
-        
-import customtkinter as ctk
 
 class LoadingDialog(ctk.CTkToplevel):
     def __init__(self, 
                  parent, 
                  message="Đang xử lý...", 
-                 progress_color="#012C49", 
+                 progress_color=None, # Cho phép None để lấy mặc định
                  mode="determinate", 
                  height_progress=18,
-                 temp_topmost_off: bool = False): # <-- THAM SỐ MỚI
+                 temp_topmost_off: bool = False):
         
         super().__init__(parent)
         self.geometry("500x200")
         self.title("")
         self.resizable(False, False)
         self.overrideredirect(True)
-        self.configure(bg="#F2F2F2", fg_color="#F2F2F2")
-        self.attributes("-transparentcolor", "#F2F2F2")
-        self.attributes("-alpha", 0.93)
+        
+        # --- SỬA MÀU THEO THEME ---
+        bg_color = Theme.Color.BG_CARD
+        text_color = Theme.Color.TEXT
+        p_color = progress_color if progress_color else Theme.Color.PRIMARY
+        # --------------------------
 
-        # Luôn nằm trên cùng và modal
+        self.configure(bg=bg_color, fg_color=bg_color)
+        self.attributes("-transparentcolor", "#F2F2F2") 
+        self.attributes("-alpha", 0.95)
         self.attributes("-topmost", True)
-        self.grab_set() # <-- Đây cũng là một phần của vấn đề
+        self.grab_set()
 
         # Container
-        self.container = ctk.CTkFrame(self, corner_radius=20, fg_color="white")
+        self.container = ctk.CTkFrame(self, corner_radius=20, fg_color=bg_color) # Dùng màu Theme
         self.container.pack(expand=True, fill="both", padx=20, pady=20)
 
         # Label
         self.label = ctk.CTkLabel(
             self.container,
             text=message,
-            font=("Bahnschrift", 20, "bold"),
-            text_color="#002F6C"
+            font=AppFont.H3, # Dùng Font mới
+            text_color=text_color # Dùng màu Theme
         )
         self.label.pack(pady=(30, 20))
 
@@ -995,8 +924,8 @@ class LoadingDialog(ctk.CTkToplevel):
             width=400,
             height=height_progress,
             corner_radius=10,
-            progress_color=progress_color,
-            fg_color="#E0E0E0",
+            progress_color=p_color,
+            fg_color=Theme.Color.BORDER, # Màu nền thanh progress
             mode=mode
         )
         self.progressbar.pack(pady=(0, 10))
@@ -1126,32 +1055,40 @@ class ToastNotification(ctk.CTkToplevel):
         else:
             self.destroy()
             
-    
 class CollapsibleFrame(ctk.CTkFrame):
-    def __init__(self, master, title="", color="#FFFFFF", controller=None, **kwargs):
+    def __init__(self, master, title="", color=None, controller=None, **kwargs):
+        # SỬA: Mặc định color là trong suốt hoặc BG_CARD
         super().__init__(master, fg_color="transparent", **kwargs)
         self.grid_columnconfigure(0, weight=1)
 
         self.title = title
         self.controller = controller
         self.is_expanded = False
-        self.color = color
+        
+        # Nếu không truyền color, dùng BG_CARD cho header nổi bật
+        self.color = color if color else Theme.Color.BG_CARD
 
         self.header_frame = ctk.CTkFrame(self, fg_color=self.color, corner_radius=10, cursor="hand2")
         self.header_frame.grid(row=0, column=0, padx=5, pady=(5, 0), sticky="ew")
         self.header_frame.grid_columnconfigure(0, weight=1)
 
         self.title_label = ctk.CTkLabel(
-            self.header_frame, text=self.title, font=("Bahnschrift", 16, "bold"), text_color="#05243F", cursor="hand2"
+            self.header_frame, text=self.title, font=("Bahnschrift", 16, "bold"), 
+            text_color=Theme.Color.TEXT, cursor="hand2"
         )
         self.title_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
+        # SỬA: Nút mũi tên dùng màu Theme
         self.toggle_button = ctk.CTkButton(
             self.header_frame, text="⇣", font=("Bahnschrift", 18, "bold"), width=30, height=30,
-            fg_color="#05243F", hover_color="#214768", command=None, cursor="hand2"
+            fg_color=Theme.Color.SECONDARY,          # Màu nền nút
+            text_color=Theme.Color.TEXT,             # Màu mũi tên
+            hover_color=Theme.Color.PRIMARY_HOVER,   # Màu khi hover
+            command=None, cursor="hand2"
         )
         self.toggle_button.grid(row=0, column=1, padx=10, pady=5, sticky="e")
 
+        # SỬA: Content frame cũng nên theo màu nền được truyền vào
         self.content_frame = ctk.CTkFrame(self, fg_color=self.color, corner_radius=10)
 
         self.header_frame.bind("<Button-1>", self.toggle_event)

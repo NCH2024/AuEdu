@@ -10,12 +10,9 @@ VERSION: 1.0.0
 
 from gui.main_window import runapp
 from core.app_config import load_config
-import pygame
 
 if __name__ == "__main__":      
         # Khởi chạy tệp cài đặt ứng dụng
         AppConfig = load_config()
-        # Khởi tạo mixer của pygame một lần duy nhất khi ứng dụng bắt đầu
-        pygame.mixer.init() 
         # Gọi hàm runapp để khởi chạy ứng dụng
         runapp(config=AppConfig)                                        

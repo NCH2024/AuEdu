@@ -3,19 +3,20 @@ from gui.base.utils import *
 from core.utils import get_base_path
 from PIL import Image
 import os
-
+from core.theme_manager import *
 
 class BaseFrame(ctk.CTkFrame):
     def __init__(self, master=None, **kwargs):
+        kwargs['fg_color'] = Theme.Color.BG
+        kwargs['corner_radius'] = 0
         super().__init__(master, **kwargs)
-        self.configure(fg_color="#05243F", corner_radius=20)
+        
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
         
-        self.widget_color = "#05243F"
-        self.text_color = "#2DFCB0"
-        self.text_color_w = "#FFFFFF"
-        self.configure(fg_color=self.widget_color)
+        self.widget_color = Theme.Color.BG
+        self.text_color = Theme.Color.TEXT
+        self.text_color_w = Theme.Color.TEXT_SUB
 
         self.grid_columnconfigure(0, weight=0, minsize=500)
         self.grid_columnconfigure(1, weight=1)
@@ -26,8 +27,8 @@ class BaseFrame(ctk.CTkFrame):
         self.label_title = ctk.CTkLabel(
             self,
             text="Base Frame",
-            font=("Bahnschrift", 20, "bold"),
-            text_color=self.text_color_w
+            font=AppFont.H3,
+            text_color=self.text_color
         )
         self.label_title.grid(row=0, column=0, pady=(0,5), padx=(10,0), sticky="nw")
         
@@ -44,9 +45,9 @@ class BaseFrame(ctk.CTkFrame):
         self.close_button = ButtonTheme(self,
                                         text="ESC", 
                                         command=self.on_close, 
-                                        fg_color="transparent", 
+                                        fg_color=ColorPalette.DEEP_NAVY, 
                                         hover_color="#939393",
-                                        font=("Bahnschrift", 18, "bold"),
+                                        font=AppFont.H3,
                                         border_width=0,
                                         width=40,
                                         height=40,

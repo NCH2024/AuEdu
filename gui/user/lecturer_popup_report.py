@@ -29,7 +29,7 @@ class PopUpReport(BasePopupWindow):
     def __init__(self, master=None, config=None, option=None, class_name=None, subject_name=None, username=None, **kwargs):
         super().__init__(master, config, **kwargs)
         
-        self.fg_color = "#2DFCB0"
+        self.fg_color = Theme.Color.PRIMARY
         
         # --- Lưu các tham số đầu vào ---
         self.option = option
@@ -138,7 +138,7 @@ class PopUpReport(BasePopupWindow):
         """
         # --- Khung xem trước ---
         show_preview_frame = ctk.CTkFrame(self, fg_color="transparent")
-        show_preview_frame.grid(row=0, column=0, padx=(30, 5), pady=(60, 20), sticky="nsew")
+        show_preview_frame.grid(row=0, column=0, padx=(0,0), pady=(0,0), sticky="nsew")
         show_preview_frame.columnconfigure(0, weight=1)
         show_preview_frame.rowconfigure(1, weight=1)
         
@@ -166,7 +166,7 @@ class PopUpReport(BasePopupWindow):
                          .resize_and_pad(display_width, display_height, background_color=(0, 0, 0, 0)) \
                          .to_ctkimage()
                          
-        frame_round = ctk.CTkFrame(show_preview_frame, fg_color="white", corner_radius=10, border_color=self.fg_color, border_width=2)
+        frame_round = ctk.CTkFrame(show_preview_frame, fg_color=Theme.Color.BG_CARD, corner_radius=10, border_color=self.fg_color, border_width=2)
         frame_round.grid(row=1, column=0, padx=0, pady=20, sticky="nsew")
         frame_round.columnconfigure(0, weight=1)
         frame_round.rowconfigure(0, weight=1)

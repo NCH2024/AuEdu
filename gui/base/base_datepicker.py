@@ -1,9 +1,10 @@
-# (Đặt ở đầu file admin_students_manager.py hoặc trong utils.py)
 import tkinter as tk
 import customtkinter as ctk
-from datetime import datetime, date # <<< Đảm bảo có `date`
+from datetime import datetime, date 
 import calendar # <<< Import calendar ở đây
-from tkinter import messagebox # <<< Import messagebox
+from tkinter import messagebox
+
+from core.theme_manager import Theme 
 
 class DatePicker(ctk.CTkFrame):
     def __init__(self, master=None, **kwargs):
@@ -108,14 +109,17 @@ class DatePicker(ctk.CTkFrame):
                 if day == 0:
                     ctk.CTkLabel(days_frame, text="", width=30).grid(row=week_num + 1, column=col_index) # Tăng width
                 else:
+                    # ...
                     btn = ctk.CTkButton(
-                        days_frame, text=str(day), width=30, height=28, # Tăng width
+                        days_frame, text=str(day), width=30, height=28,
                         command=lambda d=day: self.select_date(d),
                         fg_color="transparent",
-                        text_color=ctk.ThemeManager.theme["CTkLabel"]["text_color"],
-                        hover_color=ctk.ThemeManager.theme["CTkButton"]["hover_color"],
+                        
+                        text_color=Theme.Color.TEXT, 
+                        hover_color=Theme.Color.SECONDARY,
                         border_width=0, corner_radius=4
                     )
+                    # ...
                     today = datetime.now()
                     try:
                         current_day_dt = datetime(self.current_year, self.current_month, day)
