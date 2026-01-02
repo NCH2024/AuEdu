@@ -1,9 +1,10 @@
 from gui.base.utils import *
 import customtkinter as ctk
 import threading
-from tkinter import messagebox
+from tkinter import font, messagebox
 from core.app_face_recognition.widget_attendance_face import WidgetAttendanceFace
 from core.app_face_recognition.controller import MainController
+from core.theme_manager import Theme, AppFont
 
 
 class CheckConfigAttendance(ctk.CTkFrame):
@@ -17,7 +18,8 @@ class CheckConfigAttendance(ctk.CTkFrame):
         mode_attendace=None,
         username=None,
     ):
-        super().__init__(master)
+        kwargs = {"corner_radius": 0}
+        super().__init__(master, **kwargs)
         self.appconfig = appconfig
         self.class_name = class_name
         self.date_str = date_str
@@ -25,9 +27,9 @@ class CheckConfigAttendance(ctk.CTkFrame):
         self.mode_attdenace = mode_attendace
         self.username = username
         self.controller = None
-        self.widget_color = "#05243F"
-        self.text_color = "#2DFCB0"
-        self.text_color_w = "#FFFFFF"
+        self.widget_color = Theme.Color.BG
+        self.text_color = Theme.Color.PRIMARY
+        self.text_color_w = Theme.Color.TEXT
 
         self.configure(fg_color=self.widget_color)
         self.rowconfigure(0, weight=1)
@@ -44,9 +46,9 @@ class CheckConfigAttendance(ctk.CTkFrame):
 
         middle_frame = ctk.CTkFrame(
             self.main_frame,
-            fg_color="#07355F",
+            fg_color=Theme.Color.BG_CARD,
             corner_radius=20,
-            border_color=self.text_color,
+            border_color=Theme.Color.BORDER,
             border_width=2,
         )
         middle_frame.grid(row=0, column=0, ipadx=40, ipady=30, padx=20, pady=20)
@@ -79,8 +81,8 @@ class CheckConfigAttendance(ctk.CTkFrame):
         btn_check_start = ctk.CTkRadioButton(
             check_frame,
             text="Điểm danh đầu buổi",
-            text_color="white",
-            font=("Arial", 18),
+            text_color=Theme.Color.SECONDARY,
+            font=AppFont.H4,
             value="start",
             variable=self.options,
         )
@@ -89,8 +91,8 @@ class CheckConfigAttendance(ctk.CTkFrame):
         btn_check_end = ctk.CTkRadioButton(
             check_frame,
             text="Điểm danh cuối buổi",
-            text_color="white",
-            font=("Arial", 18),
+            text_color=Theme.Color.SECONDARY,
+            font=AppFont.H4,
             value="end",
             variable=self.options,
         )

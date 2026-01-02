@@ -165,8 +165,7 @@ class StatsSummaryCard(ctk.CTkFrame):
     """Widget thẻ tóm tắt thống kê"""
     def __init__(self, master, title, value, subtitle="", 
                  color=None, icon_text="📊", width=200, height=120, **kwargs):
-        # SỬA: Dùng màu nền BG_CARD thay vì white
-        super().__init__(master, fg_color=Theme.Color.BG_CARD, corner_radius=10, 
+        super().__init__(master, fg_color=Theme.Color.BG, corner_radius=10, 
                         width=width, height=height, **kwargs)
         
         self.title = title

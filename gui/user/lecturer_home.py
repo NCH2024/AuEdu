@@ -32,7 +32,7 @@ class LecturerHome(ctk.CTkFrame):
         # --- TITLE ---
         self.title_widget = ctk.CTkLabel(
             self, text="Dashboard > TRANG CHỦ", 
-            font=AppFont.H3, 
+            font=AppFont.H4, 
             text_color=Theme.Color.TEXT
         )
         self.title_widget.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="nw")

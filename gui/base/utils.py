@@ -398,7 +398,7 @@ class WigdetFrame(ctk.CTkFrame):
         width=100, 
         height=100, 
         radius=20,
-        widget_color="#2DFCB0",
+        widget_color=Theme.Color.BG_CARD,
         row=0,
         column=0,
         rowspan=1,
@@ -697,13 +697,19 @@ class NotifyCard(ctk.CTkFrame):
     def __init__(self, master, title, content,
                  ngay_dang, 
                  image_pil, 
+                 fg_color=None,
                  on_click=None, 
                  height=150, 
                  width=250, 
                 text_btn="Xem chi tiết", **kwargs):
-        # SỬA: Dùng BG_CARD thay vì "white"
-        super().__init__(master, fg_color=Theme.Color.BG_CARD, corner_radius=15, **kwargs)
-
+        
+        super().__init__(master, corner_radius=15, **kwargs)
+        mode = ctk.get_appearance_mode()
+        if mode == "Dark":
+            fg_color = Theme.Color.BG_CARD
+        else:
+            fg_color = Theme.Color.BG
+        self.configure(fg_color=fg_color)
         if image_pil:
             img = ImageProcessor(image_pil).crop_to_aspect(4, 3).to_ctkimage(size=(width, height))
         else:
@@ -714,13 +720,13 @@ class NotifyCard(ctk.CTkFrame):
         self.image_label.grid(row=0, column=0, rowspan=3, padx=0, pady=0)
 
         # SỬA: Dùng text_color từ Theme (RED_ALERT hoặc DANGER)
-        self.title_label = ctk.CTkLabel(self, text=title, font=("Bahnschrift", 16, "bold"), 
-                                        text_color=Theme.Color.RED_ALERT, wraplength=370)
+        self.title_label = ctk.CTkLabel(self, text=title, font=AppFont.H4, 
+                                        text_color=Theme.Color.TEXT, wraplength=470)
         self.title_label.grid(row=0, column=1, sticky="w", padx=20, pady=(10, 0))
 
         # SỬA: Dùng TEXT_SUB cho ngày tháng
         self.date_label = ctk.CTkLabel(self, text=ngay_dang.strftime("%d/%m/%Y %H:%M"), 
-                                       font=("Bahnschrift", 12), text_color=Theme.Color.TEXT_SUB)
+                                       font=AppFont.BODY, text_color=Theme.Color.TEXT_SUB)
         self.date_label.grid(row=1, column=1, sticky="w", padx=20, pady=2)
         
         # SỬA: ButtonTheme mặc định đã có màu chuẩn, nhưng nếu dùng CTkButton thường thì nên set màu
@@ -757,8 +763,8 @@ class NotifyList(ctk.CTkFrame):
         top.focus_force()
         top.attributes("-topmost", True)
 
-        ctk.CTkLabel(top, text=title, font=("Bahnschrift", 16, "bold"), wraplength=300).pack(pady=10)
-        ctk.CTkLabel(top, text=content, font=("Bahnschrift", 14), wraplength=450, justify="left").pack(pady=10)
+        ctk.CTkLabel(top, text=title, font=AppFont.H4, text_color=Theme.Color.TEXT, wraplength=500).pack(pady=10)
+        ctk.CTkLabel(top, text=content, font=AppFont.BODY, text_color=Theme.Color.TEXT_SUB, wraplength=450, justify="left").pack(pady=10)
 
 class SliderWithLabel(ctk.CTkFrame):
     def __init__(self, master, label_text, from_=0, to=1, initial=0.5, command=None, **kwargs):
@@ -773,7 +779,7 @@ class SliderWithLabel(ctk.CTkFrame):
         self.label = ctk.CTkLabel(self, text=label_text, text_color=self.label_color, font=("Bahnschrift", 14))
         self.label.grid(row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(5, 0))
 
-        self.min_label = ctk.CTkLabel(self, text=str(from_), font=("Bahnschrift", 13), text_color=self.value_color)
+        self.min_label = ctk.CTkLabel(self, text=str(from_), font=AppFont.BODY, text_color=self.value_color)
         self.min_label.grid(row=1, column=0, sticky="w", padx=(10, 5))
 
         if self.is_integer_slider:
@@ -791,10 +797,10 @@ class SliderWithLabel(ctk.CTkFrame):
         )
         self.slider.grid(row=1, column=1, sticky="ew", padx=5)
 
-        self.max_label = ctk.CTkLabel(self, text=str(to), font=("Bahnschrift", 13), text_color=self.value_color)
+        self.max_label = ctk.CTkLabel(self, text=str(to), font=AppFont.BODY, text_color=self.value_color)
         self.max_label.grid(row=1, column=2, sticky="e", padx=(5, 10))
 
-        self.value_label = ctk.CTkLabel(self, text="", text_color=self.value_color, font=("Bahnschrift", 13, "bold"))
+        self.value_label = ctk.CTkLabel(self, text="", text_color=self.value_color, font=AppFont.BODY_BOLD)
         self.value_label.grid(row=2, column=0, columnspan=3, pady=(2, 10))
 
         self.grid_columnconfigure(1, weight=1)
@@ -845,7 +851,7 @@ class SliderWithLabel(ctk.CTkFrame):
 class SwitchOption(ctk.CTkFrame):
     def __init__(self, master, text, initial=True, command=None, wraplenght=500, 
                  text_color=None, # Cho phép truyền vào, nếu không thì lấy Theme
-                 font=("Bahnschrift", 13), **kwargs):
+                 font=AppFont.BODY, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         
         # SỬA: Lấy mặc định từ Theme
@@ -1012,10 +1018,10 @@ class ToastNotification(ctk.CTkToplevel):
         self.attributes("-topmost", True)
         self.attributes("-alpha", self.opacity)
 
-        self.configure(fg_color="#000945")
+        self.configure(fg_color=Theme.Color.PRIMARY, padx=10, pady=5, corner_radius=15)
 
         # Label nội dung
-        self.label = ctk.CTkLabel(self, text=message, text_color="#A0FB3E", font=("Bahnschrift", 15, "bold"), corner_radius=20)
+        self.label = ctk.CTkLabel(self, text=message, text_color=Theme.Color.SECONDARY, font=AppFont.H6, corner_radius=20)
         self.label.pack(padx=15, pady=10)
 
         self.update_idletasks()
@@ -1073,14 +1079,14 @@ class CollapsibleFrame(ctk.CTkFrame):
         self.header_frame.grid_columnconfigure(0, weight=1)
 
         self.title_label = ctk.CTkLabel(
-            self.header_frame, text=self.title, font=("Bahnschrift", 16, "bold"), 
+            self.header_frame, text=self.title, font=AppFont.H3, 
             text_color=Theme.Color.TEXT, cursor="hand2"
         )
         self.title_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
         # SỬA: Nút mũi tên dùng màu Theme
         self.toggle_button = ctk.CTkButton(
-            self.header_frame, text="⇣", font=("Bahnschrift", 18, "bold"), width=30, height=30,
+            self.header_frame, text="⇣", font=AppFont.H3, width=30, height=30,
             fg_color=Theme.Color.SECONDARY,          # Màu nền nút
             text_color=Theme.Color.TEXT,             # Màu mũi tên
             hover_color=Theme.Color.PRIMARY_HOVER,   # Màu khi hover

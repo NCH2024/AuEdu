@@ -21,18 +21,19 @@ class DashboardView(BaseView):
         self.AppConfig = kwargs.get('config')
 
         # Sidebar (menu bên trái)
-        self.sidebar = ctk.CTkFrame(self, width=300, corner_radius=0, fg_color=Theme.Color.BG_CARD)
+        self.sidebar = ctk.CTkFrame(self, width=240, corner_radius=0, fg_color=Theme.Color.BG_CARD)
         # Content area (bên phải)
         self.content = ctk.CTkFrame(self, corner_radius=0, fg_color="white")
 
         # Grid Layout
         self.sidebar.grid(row=0, column=0, sticky="nswe")
+        self.sidebar.propagate(False)  # Giữ nguyên kích thước sidebar
         self.content.grid(row=0, column=1, sticky="nsew")
         
         self.content.grid_rowconfigure(0, weight=1)
         self.content.grid_columnconfigure(0, weight=1)
 
-        self.grid_columnconfigure(0, minsize=300)      
+        self.grid_columnconfigure(0, minsize=200)      
         self.grid_columnconfigure(1, weight=1)         
         self.grid_rowconfigure(0, weight=1)            
 
@@ -41,10 +42,10 @@ class DashboardView(BaseView):
         try:
             self.bg_ctkimage = ImageProcessor(os.path.join(base_path, "resources","images","logo.png")) \
                                     .crop_to_aspect(467, 213) \
-                                    .resize(232, 105) \
-                                    .to_ctkimage(size=(232,105))
+                                    .resize(187, 85) \
+                                    .to_ctkimage(size=(187,85))
             self.bg_label = ctk.CTkLabel(self.sidebar, image=self.bg_ctkimage, text="")
-            self.bg_label.pack(pady=10, padx=5)
+            self.bg_label.pack(pady=(30,30), padx=5, fill="x")
         except Exception as e:
             print(f"Lỗi load logo: {e}")
 
@@ -59,7 +60,7 @@ class DashboardView(BaseView):
             fg_color=ColorPalette.BLUE_INFO,  # Màu xanh dương nổi bật
             command=self.logout
         )
-        self.btn_logout.pack(pady=20, padx=20, anchor="s", side="bottom")
+        self.btn_logout.pack(pady=20, padx=10, anchor="s", side="bottom")
 
         # --- NÚT ĐỔI GIAO DIỆN (Thêm mới) ---
         self.setup_theme_button()
@@ -69,7 +70,6 @@ class DashboardView(BaseView):
         base_path = get_base_path()
         icon_img = None
         try:
-            # Em nhớ đổi tên file ảnh ở đây nếu khác
             icon_path = os.path.join(base_path, "resources", "images", "icon_darkmode.png") 
             if os.path.exists(icon_path):
                  icon_img = ImageProcessor(icon_path).resize(24, 24).to_white_icon().to_ctkimage()
@@ -95,7 +95,7 @@ class DashboardView(BaseView):
             text_color="white",
             command=self.toggle_theme
         )
-        self.btn_theme.pack(pady=(10, 0), padx=20, anchor="s", side="bottom")
+        self.btn_theme.pack(pady=(10, 0), padx=10, anchor="s", side="bottom")
 
     def toggle_theme(self):
         """Xử lý đổi theme và tự động đăng nhập lại"""
@@ -155,3 +155,45 @@ class DashboardView(BaseView):
             
             # Tự bấm nút đăng nhập
             app_login.start_login_process()
+            
+    def setup_theme_button_menu(self, img_name=None, text_btn=None, command=None):
+        base_path = get_base_path()
+        icon_img_white = None
+        icon_img_black = None
+        try:
+            icon_path = os.path.join(base_path, "resources", "images", f"{img_name}") 
+            if os.path.exists(icon_path):
+                # Tạo sẵn 2 phiên bản màu để chuyển đổi nhanh
+                icon_img_white = ImageProcessor(icon_path).resize(24, 24).to_white_icon().to_ctkimage()
+                icon_img_black = ImageProcessor(icon_path).resize(24, 24).to_ctkimage()
+        except:
+            pass
+
+        my_button = self.ButtonTheme(
+            self.sidebar,
+            text=f"      {text_btn}", # Thêm 6 khoảng trắng trước chữ để giãn cách với icon
+            image=icon_img_black if ctk.get_appearance_mode() == "Light" else icon_img_white,
+            font=AppFont.H6,
+            height=45,          # Tăng chiều cao lên một chút cho thoáng
+            width=200,         # Cố định chiều rộng để các nút bằng nhau
+            anchor="w",         # CĂN TRÁI TOÀN BỘ
+            compound="left",    # ICON BÊN TRÁI CHỮ
+            command=command
+        )
+        
+        my_button.icon_white = icon_img_white
+        my_button.icon_black = icon_img_black
+
+        # (Giữ nguyên logic hover em đã viết ở dưới)
+        def on_hover(event):
+            my_button.configure(image=icon_img_white)
+
+        def on_leave(event):
+            if ctk.get_appearance_mode() == "Light":
+                my_button.configure(image=icon_img_black)
+            else:
+                my_button.configure(image=icon_img_white)
+
+        my_button.bind("<Enter>", on_hover) 
+        my_button.bind("<Leave>", on_leave) 
+        return my_button

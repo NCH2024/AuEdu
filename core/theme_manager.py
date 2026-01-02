@@ -12,11 +12,14 @@ class AppFont:
     H1 = (NAME, 30, "bold")
     H2 = (NAME, 24, "bold")
     H3 = (NAME, 20, "bold")
-    BODY = (NAME, 14, "normal")
-    BODY_BOLD = (NAME, 14, "bold")
-    SMALL = (NAME, 12, "normal")
+    H4 = (NAME, 18, "bold")
+    H5 = (NAME, 16, "bold")
+    H6 = (NAME, 14, "bold")
+    BODY = (NAME, 13, "normal")
+    BODY_BOLD = (NAME, 13, "bold")
+    SMALL = (NAME, 10, "normal")
     # Thêm font nghiêng nhỏ cho các dòng chú thích (*)
-    SMALL_ITALIC = (NAME, 11, "italic")
+    SMALL_ITALIC = (NAME, 10, "italic")
 
 class ColorPalette:
     """Kho màu gốc (Palette)"""
@@ -63,7 +66,7 @@ class Theme:
         NEUTRAL = ""
 
     @staticmethod
-    def load_theme(mode="Dark"):
+    def load_theme(mode=None):
         if mode == "Light":
             ctk.set_appearance_mode("Light")
             Theme.Color.PRIMARY = ColorPalette.DARK_BLUE

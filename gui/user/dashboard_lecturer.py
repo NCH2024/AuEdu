@@ -166,28 +166,28 @@ class LecturerDashboard(DashboardView):
         self.say_hello = ctk.CTkLabel(
             self.sidebar, 
             text=f"Xin chào,\n{user}", 
-            font=AppFont.H2, 
-            justify="left", 
-            anchor="w",
+            font=AppFont.H4, 
+            justify="center", 
+            anchor="center",
             text_color=Theme.Color.PRIMARY # Tên người dùng màu nổi bật
         )
-        self.say_hello.pack(pady=(0, 20), padx=30, fill="x")
+        self.say_hello.pack(pady=(20, 20), padx=5, fill="x")
         
         # 3. Danh sách nút Menu
-        self.home_btn = self.ButtonTheme(self.sidebar, "🏠  TRANG CHỦ", font=AppFont.BODY_BOLD, command=lambda: self.show_frame(LecturerHome))
-        self.home_btn.pack(pady=5, padx=20, fill="x")
+        self.home_btn = self.setup_theme_button_menu(img_name="icon_home.png", text_btn="Trang chủ", command=lambda: self.show_frame(LecturerHome))
+        self.home_btn.pack(pady=(10, 5), padx=10, anchor="n", side="top")
 
-        self.attendance_btn = self.ButtonTheme(self.sidebar, "📸  ĐIỂM DANH", font=AppFont.BODY_BOLD, command=lambda: self.show_frame(LecturerAttendance))
-        self.attendance_btn.pack(pady=5, padx=20, fill="x")
-        
-        self.schedule_btn = self.ButtonTheme(self.sidebar, "📅  LỊCH DẠY", font=AppFont.BODY_BOLD, command=lambda: self.show_frame(LecturerSchedule))
-        self.schedule_btn.pack(pady=5, padx=20, fill="x")
+        self.attendance_btn = self.setup_theme_button_menu(img_name="icon_attendent.png", text_btn="Điểm danh", command=lambda: self.show_frame(LecturerAttendance))
+        self.attendance_btn.pack(pady=5, padx=10, anchor="n", side="top")
 
-        self.statistical_btn = self.ButtonTheme(self.sidebar, "📊  THỐNG KÊ", font=AppFont.BODY_BOLD, command=lambda: self.show_frame(LecturerStatistical))
-        self.statistical_btn.pack(pady=5, padx=20, fill="x")
-        
-        self.setting_btn = self.ButtonTheme(self.sidebar, "⚙  CÀI ĐẶT", font=AppFont.BODY_BOLD, command=lambda: self.show_frame(LecturerSettings))
-        self.setting_btn.pack(pady=5, padx=20, fill="x")
+        self.schedule_btn = self.setup_theme_button_menu(img_name="icon_schedule.png", text_btn="Lịch dạy", command=lambda: self.show_frame(LecturerSchedule))
+        self.schedule_btn.pack(pady=5, padx=10, anchor="n", side="top")
+
+        self.statistical_btn = self.setup_theme_button_menu(img_name="icon_statistic.png", text_btn="Thống kê", command=lambda: self.show_frame(LecturerStatistical))
+        self.statistical_btn.pack(pady=5, padx=10, anchor="n", side="top")
+
+        self.setting_btn = self.setup_theme_button_menu(img_name="icon_setting.png", text_btn="Cài đặt", command=lambda: self.show_frame(LecturerSettings))
+        self.setting_btn.pack(pady=5, padx=10, anchor="n", side="top")
 
     def show_slideshow(self):
         """Hiển thị Slideshow Responsive Full Panel."""
@@ -254,8 +254,18 @@ class LecturerDashboard(DashboardView):
 
             for page_name, btn in buttons.items():
                 if page_name == self.current_page:
-                    # Active: Áp dụng màu nền, màu chữ tương phản và màu hover mới
-                    btn.configure(fg_color=bg_active, text_color=text_active, hover_color=hover_active)
+                    btn.configure(
+                        fg_color=bg_active, 
+                        text_color=text_active, 
+                        hover_color=hover_active,
+                        image=btn.icon_white # Ép icon luôn trắng khi đang chọn
+                    )
                 else:
-                    # Inactive
-                    btn.configure(fg_color=bg_normal, text_color=text_normal, hover_color=hover_normal)
+                    # TRẠNG THÁI BÌNH THƯỜNG: Trả về màu theo giao diện
+                    icon_normal = btn.icon_black if ctk.get_appearance_mode() == "Light" else btn.icon_white
+                    btn.configure(
+                        fg_color=bg_normal, 
+                        text_color=text_normal, 
+                        hover_color=hover_normal,
+                        image=icon_normal # Trả lại màu icon chuẩn (Đen cho Light, Trắng cho Dark)
+            )

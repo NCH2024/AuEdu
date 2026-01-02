@@ -11,9 +11,11 @@ import pygame
 import cv2
 from core.utils import get_base_path
 import os
+from core.theme_manager import Theme, AppFont
 
 class WidgetTranningFace(ctk.CTkFrame):
     def __init__(self, master=None, username=None, controller=None, config=None, **kwargs):
+        kwargs['corner_radius'] = 0
         super().__init__(master, **kwargs)
         self.username = username
         self.controller = controller
@@ -28,10 +30,11 @@ class WidgetTranningFace(ctk.CTkFrame):
         self.sound_fail = os.path.join(base_path, "./resources/sound/fail.wav")
         self.sound_success = os.path.join(base_path, "./resources/sound/success.wav")
 
-
-        self.configure(fg_color="white")
-        self.widget_color = "#2DFCB0"
-        self.txt_color_title = "#1736FF"
+        # SỬA: Màu sắc theo Theme
+        self.configure(fg_color=Theme.Color.BG) # Nền chính
+        self.widget_color = Theme.Color.PRIMARY 
+        self.txt_color_title = Theme.Color.PRIMARY
+        self.bg_card_color = Theme.Color.BG_CARD
 
         # Cấu hình bố cục 3 cột ngay từ đầu
         self.pack(fill="both", expand=True)
@@ -41,7 +44,7 @@ class WidgetTranningFace(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         # === TIÊU ĐỀ ===
-        self.txt_title = LabelCustom(self, "Dashboard > Điểm danh sinh viên > Đào tạo dữ liệu khuôn mặt",wraplength=600, font_size=16, text_color="#05243F")
+        self.txt_title = LabelCustom(self, "Dashboard > Điểm danh sinh viên > Đào tạo dữ liệu khuôn mặt",wraplength=600, font_size=16, text_color=Theme.Color.TEXT)
         self.txt_title.grid(row=0, column=0, columnspan=3, padx=15, pady=(10, 5), sticky="nw")
 
         # === KHUNG TRÁI (THÔNG TIN SINH VIÊN) ===
@@ -52,8 +55,10 @@ class WidgetTranningFace(ctk.CTkFrame):
         self.left_frame.grid_columnconfigure(0, weight=1)
         self.left_frame.grid_propagate(False)
 
-        # --- THÔNG TIN SINH VIÊN ---
-        self.widget_student = ctk.CTkFrame(self.left_frame, fg_color="white", height=300, border_color=self.widget_color, border_width=2)
+        # THÔNG TIN SINH VIÊN (Card)
+        # SỬA: fg_color=BG_CARD
+        self.widget_student = ctk.CTkFrame(self.left_frame, fg_color=self.bg_card_color, 
+                                           height=300, border_color=Theme.Color.BORDER, border_width=1)
         self.widget_student.grid(row=0, column=0, sticky="nsew", pady=(0, 7))
         self.widget_student.grid_columnconfigure(0, weight=10)
         self.widget_student.grid_columnconfigure(1, weight=90)
@@ -88,8 +93,8 @@ class WidgetTranningFace(ctk.CTkFrame):
         # --- THÔNG TIN DỮ LIỆU ---
         self.widget_aboutAttendance = ctk.CTkFrame(
             self.left_frame,
-            fg_color="white",
-            border_color=self.widget_color,
+            fg_color=self.bg_card_color,
+            border_color=Theme.Color.BORDER,
             border_width=2,
             height=120
         )
@@ -108,8 +113,9 @@ class WidgetTranningFace(ctk.CTkFrame):
         self.widget_aboutAttendance_content1 = LabelCustom(self.widget_aboutAttendance, "DỮ LIỆU KHUÔN MẶT: ", value="---")
         self.widget_aboutAttendance_content2 = LabelCustom(self.widget_aboutAttendance, "THỜI GIAN LƯU TRỮ: ", value="---")
 
-        # === KHUNG PHẢI (CÁC NÚT ĐIỀU KHIỂN) ===
-        self.widget_search = ctk.CTkFrame(self, fg_color=self.widget_color)
+        # === KHUNG PHẢI (ĐIỀU KHIỂN) ===
+        # SỬA: fg_color=BG_CARD
+        self.widget_search = ctk.CTkFrame(self, fg_color=self.bg_card_color, border_color=Theme.Color.BORDER, border_width=1)
         self.widget_search.grid(row=1, column=2, padx=(7, 15), pady=10, sticky="nsew")
         self.widget_search.grid_columnconfigure(0, weight=1)
         self.widget_search.grid_columnconfigure(1, weight=1)
@@ -120,10 +126,11 @@ class WidgetTranningFace(ctk.CTkFrame):
         self.widget_search_title.grid(row=0, column=0, columnspan=2, padx=5, pady=0, sticky="nw")
 
         self.ent_IDStudent = ctk.CTkEntry(self.widget_search, placeholder_text="Nhập vào MSSV",
-                                          width=100, height=40, font=("Bahnschrift", 12))
+                                          width=100, height=40, font=AppFont.BODY,
+                                          fg_color=Theme.Color.BG, text_color=Theme.Color.TEXT) # SỬA
         self.ent_IDStudent.grid(row=1, column=0, padx=(10,0), pady=0, sticky="nw")
 
-        self.btn_searchQuickly = ButtonTheme(self.widget_search, "Tìm kiếm", font=("Bahnschrift", 12, "normal"), width=100, command=self.cobo_search_showDataTrain)
+        self.btn_searchQuickly = ButtonTheme(self.widget_search, "Tìm kiếm", width=100, command=self.cobo_search_showDataTrain)
         self.btn_searchQuickly.grid(row=1, column=1, padx=(0,10), pady=0, sticky="ne")
 
         self.widget_search_title = LabelCustom(self.widget_search, "Chọn chế độ đào tạo: ", font_size=12, text_color=self.txt_color_title)
@@ -134,21 +141,19 @@ class WidgetTranningFace(ctk.CTkFrame):
 
         self.cbx_tooltip = Tooltip(self.cbx_subject, "Chọn chế độ đào tạo khuôn mặt cho sinh viên.\nChế độ chuyên sâu sẽ yêu cầu nhiều ảnh hơn và tốn thời gian hơn!")
 
-        self.check_setflip = SwitchOption(self.widget_search, "Lật ảnh (dùng cho camera trước)", wraplenght=110, initial=False, command=self.check_option)
+        # SỬA: SwitchOption dùng text_color theo Theme
+        self.check_setflip = SwitchOption(self.widget_search, "Lật ảnh (dùng cho camera trước)", wraplenght=110, initial=False, 
+                                          text_color=Theme.Color.TEXT, command=self.check_option)
         self.check_setflip.grid(row=4, column=0, columnspan=2, padx=5, pady=20, sticky="nwe")
 
-        self.btn_toggle_camera = ButtonTheme(self.widget_search, "Mở Camera",font=("Bahnschrift", 12, "normal"), width=100,command=self.toggle_camera)
+        self.btn_toggle_camera = ButtonTheme(self.widget_search, "Mở Camera", width=100, command=self.toggle_camera)
         self.btn_toggle_camera.grid(row=5, column=0, columnspan=2, padx=10, pady=5, sticky="nwe")
 
-        self.btn_tranning = ButtonTheme(self.widget_search, "Đào tạo dữ liệu", font=("Bahnschrift", 12, "normal"),width=100, command=self.train_data)
+        self.btn_tranning = ButtonTheme(self.widget_search, "Đào tạo dữ liệu", width=100, command=self.train_data)
         self.btn_tranning.grid(row=6, column=0, columnspan=2, padx=10, pady=5, sticky="new")
 
         self.progress_bar = None
-
-
-        # Ban đầu, ẩn khung camera
         self.camera_frame = None
-        
         self.ent_IDStudent.bind("<Return>", lambda event: self.cobo_search_showDataTrain())
 
     # === HÀM CHỨC NĂNG ===
@@ -295,7 +300,7 @@ class WidgetTranningFace(ctk.CTkFrame):
         """
         Xử lý từng bước của quá trình đào tạo.
         """
-        self.progress_bar = ctk.CTkProgressBar(self.widget_search, width=200, progress_color="#040F53")
+        self.progress_bar = ctk.CTkProgressBar(self.widget_search, width=200, progress_color=Theme.Color.PRIMARY)
         self.progress_bar.grid(row=7, column=0, columnspan=2, padx=10, pady=10, sticky="we")
         self.progress_bar.set(0)  # ban đầu = 0
         try:
@@ -475,7 +480,7 @@ class WidgetTranningFace(ctk.CTkFrame):
             top = ctk.CTkToplevel()
             top.geometry("850x520")
             top.title("Đào tạo dữ liệu khuôn mặt")
-            top.configure(fg_color="white")
+            top.configure(fg_color=Theme.Color.BG)
             if parent:
                 top.transient(parent.winfo_toplevel())
             top.lift()

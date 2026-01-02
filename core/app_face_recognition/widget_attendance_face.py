@@ -10,9 +10,11 @@ import datetime
 from core.utils import get_base_path
 import os
 from core.database import *
+from core.theme_manager import Theme, AppFont
 
 class WidgetAttendanceFace(ctk.CTkFrame):
     def __init__(self, master=None, controller=None, username=None, ma_buoi_hoc=None, option_attendace=None, check_in_type=None,config=None, **kwargs):
+        kwargs['corner_radius'] = 0
         super().__init__(master, **kwargs)
         self.controller = controller
         self.username = username
@@ -28,10 +30,12 @@ class WidgetAttendanceFace(ctk.CTkFrame):
         self.parent_frame = master
         self.loading_dialog = None
 
-        self.widget_color = "#05243F"
-        self.text_color = "#2DFCB0"
-        self.text_color_w = "#FFFFFF"
-        self.configure(fg_color=self.widget_color)
+        # SỬA: Thay thế bộ màu cứng bằng Theme
+        self.widget_color = Theme.Color.BG_CARD # Nền thẻ
+        self.text_color = Theme.Color.PRIMARY   # Màu chữ chính (Xanh/Mint)
+        self.text_color_w = Theme.Color.TEXT    # Màu chữ thường (Trắng/Đen)
+        
+        self.configure(fg_color=Theme.Color.BG) # Nền tổng thể
 
         self._setup_ui()
         
@@ -95,7 +99,9 @@ class WidgetAttendanceFace(ctk.CTkFrame):
         self.option_frame.grid_columnconfigure(0, weight=1)
         self.option_frame.grid_rowconfigure((0,1), weight=0)
 
-        self.info_frame = ctk.CTkFrame(self, fg_color=self.widget_color, border_color=self.text_color, corner_radius=20, border_width=2)
+        self.info_frame = ctk.CTkFrame(self, fg_color=self.widget_color, 
+                                       border_color=Theme.Color.BORDER, 
+                                       corner_radius=20, border_width=2)
         self.info_frame.grid(row=1, column=1, padx=15, pady=(0,15), rowspan=2, sticky="nsew")
         self.info_frame.grid_columnconfigure(0, weight=1)
         self.info_frame.grid_rowconfigure(0, weight=0)
@@ -269,12 +275,13 @@ class WidgetAttendanceFace(ctk.CTkFrame):
             text_btn="Đã điểm danh THÀNH CÔNG!",
             ngay_dang= datetime_record,
             image_pil=pil_image,
+            fg_color= Theme.Color.PRIMARY,
             content="",
             height=70,
             width=100
         )
         card.pack(fill="x", padx=5, pady=5)
-        card.detail_btn.configure(fg_color="#C3FF00", text_color= "#AC0000")
+        card.detail_btn.configure(fg_color=Theme.Color.SUCCESS, text_color=Theme.Color.BG)
 
     def toggle_camera_flip(self, is_checked=bool):
         self.flip_view = is_checked

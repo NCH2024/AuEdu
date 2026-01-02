@@ -92,24 +92,12 @@ class AdminDashboard(DashboardView):
     def setup_ui_sidebar(self, user):
         self.infor_app = ctk.CTkLabel(self.sidebar, text="QUẢN TRỊ HỆ THỐNG\nVersion 2.0", font=AppFont.SMALL, justify="center", text_color=Theme.Color.TEXT_SUB)
         self.infor_app.pack(pady=(20, 10), padx=5, fill="x")
-        
-        self.say_hello = ctk.CTkLabel(self.sidebar, text=f"Xin chào,\n{user}", font=AppFont.H2, justify="left", anchor="w", text_color=Theme.Color.PRIMARY)
-        self.say_hello.pack(pady=(0, 20), padx=30, fill="x")
-        
-        self.home_btn = self.ButtonTheme(self.sidebar, "🏠  Trang chủ", command=lambda: self.show_frame(AdminGeneral))
-        self.home_btn.pack(pady=5, padx=20, fill="x")
-        
-        # self.student_btn = self.ButtonTheme(self.sidebar, "👨‍🎓 Quản lý SV & Lớp", command=lambda: self.show_frame(AdminStudentsManager))
-        # self.student_btn.pack(pady=5, padx=20, fill="x")
-        
-        # self.lecturer_btn = self.ButtonTheme(self.sidebar, "👩‍🏫 Quản lý GV & Khoa", command=lambda: self.show_frame(AdminLecturerManager))
-        # self.lecturer_btn.pack(pady=5, padx=20, fill="x")
-        
-        # self.academic_btn = self.ButtonTheme(self.sidebar, "📚 Quản lý Học vụ", command=lambda: self.show_frame(AdminAcademic))
-        # self.academic_btn.pack(pady=5, padx=20, fill="x")
-        
-        # self.notice_btn = self.ButtonTheme(self.sidebar, "🔔 Quản lý Thông báo", command=lambda: self.show_frame(AdminNotice))
-        # self.notice_btn.pack(pady=5, padx=20, fill="x")
+
+        self.say_hello = ctk.CTkLabel(self.sidebar, text=f"Xin chào,\n{user}", font=AppFont.H4, justify="center", anchor="center", text_color=Theme.Color.PRIMARY)
+        self.say_hello.pack(pady=(20, 20), padx=5, fill="x")
+
+        self.home_btn = self.setup_theme_button_menu(img_name="icon_home.png", text_btn="Trang chủ", command=lambda: self.show_frame(AdminGeneral))
+        self.home_btn.pack(pady=(10, 0), padx=10, anchor="n", side="top")
         
     def show_slideshow(self):
         if self.slideshow and self.slideshow.winfo_exists(): self.slideshow.destroy()
