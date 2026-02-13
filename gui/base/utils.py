@@ -686,7 +686,8 @@ class CustomTable(ctk.CTkFrame):
                     anchor="w"                   # Căn trái chữ
                 )
                 # Thêm padding text chút cho đẹp
-                cell._text_label.grid_configure(padx=5)
+                if cell._text_label:
+                    cell._text_label.grid_configure(padx=5)
                 
                 if col_idx == len(self.columns) - 1:
                     cell.pack(side="left", fill="x", expand=True)

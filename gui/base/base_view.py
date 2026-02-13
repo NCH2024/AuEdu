@@ -12,6 +12,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox
 from core.theme_manager import Theme, AppFont 
+from core.theme_manager import FontLoader
 
 class BaseView(ctk.CTkFrame):
     def __init__(self, master, message_exit=True, *args, **kwargs):
@@ -21,7 +22,8 @@ class BaseView(ctk.CTkFrame):
         super().__init__(master, *args, **kwargs)
         self.master = master
         self.pack(expand=True, fill="both")
-
+        """Đăng ký font Inter khi khởi tạo BaseView"""
+        FontLoader.load_inter_fonts()
         if message_exit:
             self.master.protocol("WM_DELETE_WINDOW", self.ExitWindow)
 

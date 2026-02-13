@@ -3,12 +3,58 @@ FILE NAME: core/theme_manager.py
 DESCRIPTION: Quản lý giao diện Sáng/Tối (Đã thêm màu Hover chuẩn).
 '''
 from tkinter import ttk
+import os
+import tkinter.font as tkfont
 import customtkinter as ctk
 
 import customtkinter as ctk
+
+class FontLoader:
+    """Loader để nhúng font Intent từ thư mục fonts"""
+    _fonts_loaded = False
+    
+    @classmethod
+    def load_inter_fonts(cls):
+        """Tải và đăng ký font Inter từ thư mục dự án"""
+        if cls._fonts_loaded:
+            return True
+            
+        # Đường dẫn đến thư mục font Inter
+        possible_paths = [
+            os.path.join("resources", "fonts","Inter", "Inter.ttf"),
+        ]
+        
+        font_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                font_path = path
+                break
+        
+        if font_path:
+            try:
+                # Đăng ký font với tkinter
+                intent_font = tkfont.Font(family="Inter", size=10)
+                
+                # Trên một số hệ điều hành, cần load bằng PIL
+                try:
+                    from PIL import ImageFont
+                    ImageFont.truetype(font_path)
+                except:
+                    pass
+                    
+                cls._fonts_loaded = True
+                print(f"Đã tải font Inter từ: {font_path}")
+                return True
+            except Exception as e:
+                print(f"Không thể tải font Inter: {e}")
+        else:
+            print("Không tìm thấy file font Inter, dùng font mặc định")
+        
+        return False
 
 class AppFont:
-    NAME = "Inter" # Hoặc "Arial", "Roboto" tuỳ máy
+    """Định nghĩa các kiểu font sử dụng trong ứng dụng"""
+    NAME = "Inter"
     H1 = (NAME, 30, "bold")
     H2 = (NAME, 24, "bold")
     H3 = (NAME, 20, "bold")

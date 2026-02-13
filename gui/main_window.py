@@ -7,7 +7,7 @@ import threading
 # Import Core & Base
 from gui.base.base_view import BaseView
 from gui.base.utils import ImageProcessor, LoadingDialog
-from core.theme_manager import Theme, AppFont
+from core.theme_manager import FontLoader, Theme, AppFont
 from core.app_config import load_config, save_config
 import core.database 
 from core.utils import get_base_path
@@ -23,9 +23,11 @@ class MainWindow(BaseView):
         self.AppConfig = config
 
         # --- SIDEBAR (Bên trái) ---
-        self.sidebar = ctk.CTkFrame(self, width=450, corner_radius=0, 
-                                    fg_color=Theme.Color.SECONDARY) # Dùng màu Secondary (Xanh đậm hoặc Trắng)
-        self.sidebar.pack(side="left", fill="y")
+        self.sidebar = ctk.CTkFrame(self, width=450, 
+                                    corner_radius=20, # Bo góc mạnh
+                                    fg_color=Theme.Color.SECONDARY)
+        # Sử dụng padx, pady để tạo khoảng cách với lề, giúp nó "nổi" lên trên hình nền
+        self.sidebar.pack(side="left", fill="y", padx=(20, 20), pady=20)
         
         # --- CONTENT (Bên phải - Hình nền) ---
         self.content = ctk.CTkFrame(self, corner_radius=0, fg_color=Theme.Color.BG)
@@ -178,6 +180,10 @@ def runapp(config):
     Theme.load_theme(current_theme)
     
     root = ctk.CTk()
+    
+    # Tải font chữ tùy chỉnh SAU KHI có root window
+    FontLoader.load_inter_fonts()
+    
     root.title("PHẦN MỀM ĐIỂM DANH")
     root.geometry("1280x720")
     root.resizable(False, False)

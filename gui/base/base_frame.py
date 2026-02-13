@@ -7,8 +7,9 @@ from core.theme_manager import *
 
 class BaseFrame(ctk.CTkFrame):
     def __init__(self, master=None, **kwargs):
-        kwargs['fg_color'] = Theme.Color.BG
-        kwargs['corner_radius'] = 0
+        # SỬA: Bỏ corner_radius=0, thay bằng 15 để bo góc mềm mại
+        kwargs['fg_color'] = kwargs.get('fg_color', Theme.Color.BG_CARD) # Dùng nền Card để phân biệt với nền chính
+        kwargs['corner_radius'] = kwargs.get('corner_radius', 15) 
         super().__init__(master, **kwargs)
         
         self.grid_columnconfigure(0, weight=1)
@@ -30,7 +31,7 @@ class BaseFrame(ctk.CTkFrame):
             font=AppFont.H3,
             text_color=self.text_color
         )
-        self.label_title.grid(row=0, column=0, pady=(0,5), padx=(10,0), sticky="nw")
+        self.label_title.grid(row=0, column=0, pady=(15,5), padx=(20,0), sticky="nw")
         
         try:
             base_path = get_base_path()
@@ -42,27 +43,30 @@ class BaseFrame(ctk.CTkFrame):
                                                     
         except FileNotFoundError:
             self.exit_img = None
+            
+        # SỬA: Đồng bộ nút Close theo Theme thay vì dùng màu cố định (Hardcode)
         self.close_button = ButtonTheme(self,
                                         text="ESC", 
                                         command=self.on_close, 
-                                        fg_color=ColorPalette.DEEP_NAVY, 
-                                        hover_color="#939393",
-                                        font=AppFont.H3,
+                                        fg_color=Theme.Color.DANGER, # Nút thoát màu đỏ cảnh báo
+                                        hover_color=Theme.Color.RED_ALERT,
+                                        text_color="#FFFFFF", # Đảm bảo chữ trắng trên nền đỏ
+                                        font=AppFont.H4,
                                         border_width=0,
                                         width=40,
                                         height=40,
+                                        corner_radius=10, # Bo góc nút
                                         image=self.exit_img)
-        self.close_button.grid(row=0, column=1, pady=(0,5), padx=10, sticky="ne")
+        self.close_button.grid(row=0, column=1, pady=(15,5), padx=20, sticky="ne")
         
-        self.content_frame = ctk.CTkFrame(self, fg_color=self.widget_color)
-        self.content_frame.grid(row=1, column=0,columnspan=2, padx=0, pady=0, sticky="nsew")
+        # SỬA: Khung nội dung cũng cần bo góc
+        self.content_frame = ctk.CTkFrame(self, fg_color=self.widget_color, corner_radius=15)
+        self.content_frame.grid(row=1, column=0, columnspan=2, padx=20, pady=20, sticky="nsew")
         self.content_frame.grid_columnconfigure(0, weight=1)
         self.content_frame.grid_rowconfigure(0, weight=1)
-        
         
     def on_close(self):
         self.destroy()
         
     def set_label_title(self, title):
         self.label_title.configure(text=title)
-    

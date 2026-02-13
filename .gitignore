@@ -1,0 +1,8 @@
+image_student/
+temp_notice_images/
+__pycache__/
+.vscode/
+.DS_Store
+*.pyc
+test*.py
+venv-AuEdu/

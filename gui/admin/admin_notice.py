@@ -161,7 +161,14 @@ class AdminNotice(BaseFrame):
                     filename = f"notice_{self.selected_notice_id}_preview.png"
                 
                 saved_path = os.path.join(self.temp_notice_dir, filename)
-                img_to_display_pil = Image.open(BytesIO(image_source))
+                try:
+                    img_to_display_pil = Image.open(BytesIO(image_source))
+                except Exception as e:
+                    # Lỗi này xảy ra khi blob từ DB bị hỏng hoặc không phải là ảnh
+                    # Thay vì hiện messagebox (gây lỗi focus), chỉ in ra console và xóa preview
+                    print(f"Lỗi khi mở ảnh thông báo (ID: {self.selected_notice_id}): {e}. Bỏ qua ảnh này.")
+                    self._remove_image()
+                    return # Dừng thực thi để tránh các lỗi Folgefehler
 
             else:
                 self._remove_image() # Không có ảnh
@@ -287,7 +294,8 @@ class AdminNotice(BaseFrame):
                 self._display_image_preview(self.current_image_pil) # <<< Gọi hàm đã sửa
                 self.current_image_blob = None 
             except Exception as e:
-                messagebox.showerror("Lỗi Mở Ảnh", f"Không thể mở hoặc xử lý file ảnh:\n{e}", parent=self)
+                # Thay vì hiện messagebox (gây lỗi focus), chỉ in ra console
+                print(f"Lỗi Mở Ảnh: Không thể mở hoặc xử lý file ảnh '{file_path}'. Lỗi: {e}")
                 self.current_image_pil = None
                 self._remove_image() 
 

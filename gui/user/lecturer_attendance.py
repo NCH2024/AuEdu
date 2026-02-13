@@ -166,7 +166,7 @@ class LecturerAttendance(ctk.CTkFrame):
             )
         except Exception as e:
             loading.stop()
-            messagebox.showerror("Lỗi", f"Không thể khởi tạo mô hình.\n{e}")
+            ToastNotification(self, f"Lỗi khởi tạo mô hình: {e}", duration=4000)
 
     def get_name_and_id_camera_setting(self):
         return CameraManager.list_available_cameras()
@@ -189,7 +189,7 @@ class LecturerAttendance(ctk.CTkFrame):
                 camtest.open_camera()
                 self.after(0, lambda: loading.update_progress(0.3))
                 if not camtest.is_opened:
-                    self.after(200, lambda: messagebox.showerror("Lỗi", "Không thể kết nối đến camera."))
+                    self.after(200, lambda: ToastNotification(self, "Lỗi: Không thể kết nối đến camera.", duration=4000))
                     return
                 ok = True
                 for i in range(5):
@@ -202,7 +202,7 @@ class LecturerAttendance(ctk.CTkFrame):
                 if ok:
                     self.after(200, lambda: ToastNotification(self, "Camera hoạt động tốt!", duration=2000))
                 else:
-                    self.after(200, lambda: messagebox.showerror("Lỗi", "Không nhận được hình ảnh từ camera."))
+                    self.after(200, lambda: ToastNotification(self, "Lỗi: Không nhận được hình ảnh từ camera.", duration=4000))
             finally:
                 camtest.release_camera()
                 self.after(600, loading.destroy)
@@ -335,7 +335,7 @@ class LecturerAttendance(ctk.CTkFrame):
             for cbx in [self.widget_attendance_options_left_cbxClass, self.widget_attendance_options_left_cbxSubject, self.widget_attendance_options_left_cbxDate, self.widget_attendance_options_left_cbxSession]:
                 cbx.configure(values=["Không có"], state="disabled")
                 cbx.set("Không có")
-            messagebox.showinfo("Thông báo", "Giảng viên này chưa được phân công lớp học phần nào.")
+            ToastNotification(self, "Thông báo: Giảng viên chưa được phân công lớp học phần.", duration=4000)
             self.show_attendance_list()
 
     def show_attendance_list(self):
@@ -357,11 +357,11 @@ class LecturerAttendance(ctk.CTkFrame):
             date_str = self.widget_attendance_options_left_cbxDate.get()
             session_name = self.widget_attendance_options_left_cbxSession.get()
             if "Đang tải" in class_name or "Không có" in class_name or not all([class_name, subject_name, date_str, session_name]):
-                messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn đầy đủ thông tin trước khi điểm danh.")
+                self.after(0, lambda: ToastNotification(self, "Vui lòng chọn đầy đủ thông tin điểm danh.", duration=3000))
                 return
             ma_buoi_hoc = Db.get_ma_buoi_hoc(class_name, subject_name, date_str, session_name)
             if ma_buoi_hoc is None:
-                messagebox.showerror("Lỗi", "Không tìm thấy thông tin buổi học tương ứng.")
+                self.after(0, lambda: ToastNotification(self, "Lỗi: Không tìm thấy thông tin buổi học.", duration=3000))
                 return
             if hasattr(self, 'CheckConfigAttendace_frame') and self.CheckConfigAttendace_frame.winfo_exists():
                 return
