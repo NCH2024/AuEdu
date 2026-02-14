@@ -1,4 +1,2 @@
-flet==0.2.0
-requests==2.25.1
-flask==1.1.2
-pytest==6.2.4
+Flet==0.2.3  # Example version, adjust if necessary
+# Add any optimized dependencies needed for your project
